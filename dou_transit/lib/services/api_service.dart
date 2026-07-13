@@ -104,14 +104,22 @@ class ApiService {
     }
   }
 
+  /// Internal: parse JSON response. Handles both JSON objects and arrays.
   static Map<String, dynamic> _handleResponse(http.Response response) {
-    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    final decoded = jsonDecode(response.body);
     if (response.statusCode >= 200 && response.statusCode < 300) {
-      return body;
+      if (decoded is Map<String, dynamic>) {
+        return decoded;
+      } else if (decoded is List) {
+        // Wrap array responses in a "data" key so callers always get a Map
+        return {'data': decoded};
+      }
+      return {'data': decoded};
     } else {
+      final map = decoded is Map<String, dynamic> ? decoded : <String, dynamic>{};
       return {
-        'error': body['error'] ?? 'Request failed',
-        'details': body['details'] ?? 'Status ${response.statusCode}',
+        'error': map['error'] ?? 'Request failed',
+        'details': map['details'] ?? 'Status ${response.statusCode}',
       };
     }
   }

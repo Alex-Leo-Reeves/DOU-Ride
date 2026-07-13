@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:provider/provider.dart';
+import 'package:dou_transit/services/api_service.dart';
 import 'package:dou_transit/providers/notification_provider.dart';
 
 /// Service for managing FCM tokens and push notifications (Android).
@@ -65,11 +66,27 @@ class FcmService {
     }
   }
 
-  /// Register the FCM token with the backend.
+  /// Register the FCM token with the backend API.
+  /// Called from AuthProvider after login/registration.
   static Future<void> registerToken(String userId, {String platform = 'android'}) async {
-    // This is called from AuthProvider after login/registration.
-    // The actual API call is handled by NotificationProvider.
-    debugPrint('[FCM] Token ready for user $userId on $platform');
+    if (_currentToken == null) {
+      debugPrint('[FCM] No token to register');
+      return;
+    }
+    try {
+      final result = await ApiService.post('/api/notifications/register-token', body: {
+        'userId': userId,
+        'token': _currentToken!,
+        'platform': platform,
+      });
+      if (result.containsKey('error')) {
+        debugPrint('[FCM] Token registration failed: ${result['error']}');
+      } else {
+        debugPrint('[FCM] Token registered for user $userId ($platform)');
+      }
+    } catch (e) {
+      debugPrint('[FCM] Token registration error: $e');
+    }
   }
 
   static String? get currentToken => _currentToken;
