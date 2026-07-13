@@ -1,0 +1,72 @@
+# ============================================================
+# DOU Transit — .gitignore
+# ============================================================
+
+# --- Backend (Kotlin/Gradle) ---
+backend/.gradle/
+backend/build/
+backend/bin/
+backend/out/
+*.class
+*.jar
+*.war
+*.tar.gz
+*.log
+!backend/build/libs/*.jar
+
+# IDE
+.idea/
+*.iml
+.vscode/
+*.swp
+*.swo
+*~
+
+# --- Flutter ---
+dou_transit/build/
+dou_transit/.dart_tool/
+dou_transit/.packages
+dou_transit/.pub-cache/
+dou_transit/.flutter-plugins
+dou_transit/.flutter-plugins-dependencies
+dou_transit/pubspec.lock
+dou_transit/ios/Pods/
+dou_transit/ios/.symlinks/
+dou_transit/ios/Flutter/App.framework/
+dou_transit/ios/Flutter/Flutter.framework/
+dou_transit/ios/Flutter/Generated.xcconfig
+dou_transit/ios/Flutter/ephemeral/
+dou_transit/macos/Pods/
+dou_transit/macos/.symlinks/
+dou_transit/macos/Flutter/ephemeral/
+dou_transit/windows/flutter/ephemeral/
+dou_transit/linux/flutter/ephemeral/
+
+# --- Node / Deno ---
+node_modules/
+supabase/functions/*/node_modules/
+deno.lock
+
+# --- Environment / Secrets ---
+.env
+.env.local
+.env.production
+*.key
+firebase-service-account.json
+fcm.json
+*.p12
+*.p8
+*.mobileprovision
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# --- Misc ---
+*.tmp
+*.bak
+*.orig
+__pycache__/
+*.pyc
+/tmp/

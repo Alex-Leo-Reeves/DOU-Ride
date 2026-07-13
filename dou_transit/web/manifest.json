@@ -1,0 +1,66 @@
+{
+    "name": "DOU Transit - Dennis Osadebay University",
+    "short_name": "DOU Transit",
+    "description": "Campus transport, marketplace, and emergency services for Dennis Osadebay University students and staff.",
+    "start_url": "/",
+    "display": "standalone",
+    "background_color": "#FFFFFF",
+    "theme_color": "#000000",
+    "orientation": "portrait-primary",
+    "prefer_related_applications": false,
+    "scope": "/",
+    "lang": "en-NG",
+    "dir": "ltr",
+    "categories": ["transportation", "education", "utilities"],
+    "display_override": ["standalone", "browser"],
+    "screenshots": [],
+    "icons": [{
+            "src": "icons/Icon-192.png",
+            "sizes": "192x192",
+            "type": "image/png",
+            "purpose": "any"
+        },
+        {
+            "src": "icons/Icon-512.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "any"
+        },
+        {
+            "src": "icons/Icon-maskable-192.png",
+            "sizes": "192x192",
+            "type": "image/png",
+            "purpose": "maskable"
+        },
+        {
+            "src": "icons/Icon-maskable-512.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "maskable"
+        },
+        {
+            "src": "icons/ios-120.png",
+            "sizes": "120x120",
+            "type": "image/png",
+            "purpose": "any"
+        },
+        {
+            "src": "icons/ios-152.png",
+            "sizes": "152x152",
+            "type": "image/png",
+            "purpose": "any"
+        },
+        {
+            "src": "icons/ios-167.png",
+            "sizes": "167x167",
+            "type": "image/png",
+            "purpose": "any"
+        },
+        {
+            "src": "icons/ios-180.png",
+            "sizes": "180x180",
+            "type": "image/png",
+            "purpose": "any"
+        }
+    ]
+}

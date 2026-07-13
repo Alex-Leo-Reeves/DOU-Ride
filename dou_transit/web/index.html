@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en-NG">
+
+<head>
+    <base href="$FLUTTER_BASE_HREF">
+    <meta charset="UTF-8">
+    <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+    <!-- Primary Meta -->
+    <meta name="description" content="DOU Transit - Campus transport, marketplace, and emergency services for Dennis Osadebay University.">
+    <meta name="theme-color" content="#000000">
+    <meta name="mobile-web-app-capable" content="yes">
+
+    <!-- iOS / Safari PWA Meta Tags -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="DOU Transit">
+    <meta name="apple-touch-fullscreen" content="yes">
+
+    <!-- iOS Splash Screens -->
+    <link rel="apple-touch-startup-image" href="icons/ios-180.png" media="(device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 3)">
+    <link rel="apple-touch-startup-image" href="icons/ios-152.png" media="(device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 2)">
+
+    <!-- iOS Home Screen Icons (all sizes) -->
+    <link rel="apple-touch-icon" sizes="120x120" href="icons/ios-120.png">
+    <link rel="apple-touch-icon" sizes="152x152" href="icons/ios-152.png">
+    <link rel="apple-touch-icon" sizes="167x167" href="icons/ios-167.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="icons/ios-180.png">
+
+    <!-- iOS Smart App Banner (disable) -->
+    <meta name="apple-itunes-app" content="app-id=, app-argument=">
+
+    <!-- iOS Status Bar -->
+    <meta name="status-bar-style" content="default">
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" href="favicon.png">
+
+    <!-- Web Manifest -->
+    <link rel="manifest" href="manifest.json">
+
+    <title>DOU Transit</title>
+
+    <!-- Service Worker Registration -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', function() {
+                navigator.serviceWorker.register('/service_worker.js').then(function(reg) {
+                    console.log('[PWA] ServiceWorker registered:', reg.scope);
+
+                    // Check if user is already in standalone mode (added to home screen)
+                    if (window.navigator.standalone) {
+                        console.log('[PWA] Running in standalone iOS PWA mode');
+                        document.body.classList.add('pwa-standalone');
+                    } else {
+                        // Check if this is iOS Safari and show install prompt
+                        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+                        if (isIOS) {
+                            console.log('[PWA] iOS Safari detected - showing install guidance');
+                            // The install prompt will be shown by the Flutter screen
+                        }
+                    }
+                }).catch(function(err) {
+                    console.log('[PWA] ServiceWorker registration failed:', err);
+                });
+            });
+
+            // Listen for push subscription changes
+            navigator.serviceWorker.ready.then(function(reg) {
+                reg.pushManager.getSubscription().then(function(sub) {
+                    console.log('[PWA] Push subscription:', sub ? 'active' : 'none');
+                });
+            });
+        } else {
+            console.log('[PWA] ServiceWorker not supported in this browser');
+        }
+    </script>
+</head>
+
+<body>
+    <script src="flutter_bootstrap.js" async></script>
+</body>
+
+</html>

@@ -1,0 +1,73 @@
+name: dou_transit
+description: "DOU Transit - Campus Transport Management for Dennis Osadebay University"
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.12.2
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+
+  # Supabase - Database, Auth, Realtime
+  supabase_flutter: ^2.8.0
+
+  # WebView - DOU Portal scraping for student verification
+  flutter_inappwebview: ^6.1.0
+
+  # Mapping (OpenStreetMap - Free, no API key needed)
+  flutter_map: ^7.0.2
+  latlong2: ^0.9.1
+
+  # HTTP for OSRM API calls
+  http: ^1.2.2
+
+  # GPS & Location
+  geolocator: ^13.0.2
+  geocoding: ^3.0.0
+
+  # Firebase - FCM for Android push notifications
+  firebase_core: ^3.10.0
+  firebase_messaging: ^15.2.0
+
+  # QR Code scanning & generation
+  mobile_scanner: ^6.0.5
+  qr_flutter: ^4.1.0
+
+  # Local notifications (fallback for iOS PWA, offline mode)
+  flutter_local_notifications: ^18.0.1
+
+  # Secure storage for offline PINs and tokens
+  flutter_secure_storage: ^9.2.4
+
+  # State management
+  provider: ^6.1.2
+
+  # Location sharing via native share sheet
+  share_plus: ^10.1.4
+
+  # Flutterwave payment handled via REST API (http package)
+  # URL launcher for vendor WhatsApp links
+  url_launcher: ^6.3.1
+
+  # Image picking for driver face photo
+  image_picker: ^1.1.2
+
+  # Path provider for file storage
+  path_provider: ^2.1.5
+
+  # Connectivity
+  connectivity_plus: ^6.1.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/icons/
+    - assets/images/
