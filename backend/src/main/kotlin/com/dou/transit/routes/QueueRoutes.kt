@@ -87,7 +87,7 @@ fun Route.queueRoutes() {
             val destinationId = call.parameters["destinationId"]
                 ?: return@post call.respond(HttpStatusCode.BadRequest, ErrorResponse("Missing destinationId"))
 
-            val _ = try { call.receive<CallNextRequest>() } catch (e: Exception) {
+            val unusedBody = try { call.receive<CallNextRequest>() } catch (e: Exception) {
                 return@post call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid request body"))
             }
 

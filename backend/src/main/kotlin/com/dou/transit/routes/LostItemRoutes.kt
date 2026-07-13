@@ -246,7 +246,7 @@ fun Route.lostItemRoutes() {
         // ============================================================
         get("/my-items") {
             val studentId = call.request.headers["X-User-Id"]
-                ?: return@post call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Not authenticated"))
+                ?: return@get call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Not authenticated"))
 
             val conn = DatabaseService.getConnection()
             try {
@@ -294,7 +294,7 @@ fun Route.lostItemRoutes() {
         // ============================================================
         get("/driver-items") {
             val driverId = call.request.headers["X-User-Id"]
-                ?: return@post call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Not authenticated"))
+                ?: return@get call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Not authenticated"))
 
             val conn = DatabaseService.getConnection()
             try {
