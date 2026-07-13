@@ -38,7 +38,7 @@ BEGIN
   PERFORM
     net.http_post(
       url := webhook_url,
-      headers := '{"Content-Type": "application/json", "Authorization": "Bearer <insert-service-role-key>"}'::jsonb,
+      headers := '{"Content-Type": "application/json", "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVhd2JoZ3J4bXZ3cmhuY3BvcGhtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4Mzg5NTY1NiwiZXhwIjoyMDk5NDcxNjU2fQ.Ehgn9JGlTHoCkCxHml5QzXBpLaW1_ZRZoHjS3liDFsY"}'::jsonb,
       body := payload::text
     );
 
