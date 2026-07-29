@@ -51,12 +51,43 @@ deno.lock
 .env
 .env.local
 .env.production
+.local
+.E dotenv
 *.key
 firebase-service-account.json
 fcm.json
 *.p12
 *.p8
 *.mobileprovision
+dou-ride-firebase-adminsdk-*.json
+dou firebase.json
+dou firebase for ios.plist
+dou fcm.json
+web push certificate key pair*
+flutterwave keys.md
+full instrructions.md
+git hub for dockerfile.md
+main github where files will be stored and supabase.md
+rescan.md
+setup.md
+"dou logo'*.jpeg"
+dou logo*.jpeg
+
+# --- Build artifacts / cache ---
+rescan_files/
+dou_transit/build/
+dou_transit/.dart_tool/
+
+# --- Notes / instructions (not source code) ---
+full instrructions.md
+git hub for dockerfile.md
+main github where files will be stored and supabase.md
+rescan.md
+setup.md
+flutterwave keys.md
+firebase web sdk for ios pwa.md
+dou firebase setup instruction for ios.md
+web push certificate key pair for ios pwa
 
 # --- OS ---
 .DS_Store

@@ -1,0 +1,28 @@
+{
+    "expo": {
+        "name": "DOU Transit",
+        "slug": "dou-transit",
+        "version": "1.0.0",
+        "orientation": "portrait",
+        "icon": "./assets/dou-logo.jpeg",
+        "userInterfaceStyle": "light",
+        "splash": {
+            "backgroundColor": "#FFFFFF"
+        },
+        "ios": {
+            "supportsTablet": true,
+            "bundleIdentifier": "com.dou.transit"
+        },
+        "android": {
+            "adaptiveIcon": {
+                "backgroundColor": "#FFFFFF"
+            },
+            "package": "com.dou.transit"
+        },
+        "plugins": [
+            "expo-location",
+            "expo-secure-store",
+            "expo-asset"
+        ]
+    }
+}
