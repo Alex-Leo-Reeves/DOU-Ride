@@ -90,10 +90,10 @@ fun Route.offlineRoutes() {
                 // Generate a QR-friendly compact string
                 val qrCompact = Base64.getUrlEncoder().withoutPadding().encodeToString(encrypted)
 
-                call.respond(mapOf(
+                call.respond(mapOf<String, Any>(
                     "boardingPass" to qrCompact,
                     "pin" to boardingPin,
-                    "destinationName" to destinationName ?: "",
+                    "destinationName" to (destinationName ?: ""),
                     "fleetNumber" to fleetNumber,
                     "fare" to farePaid,
                     "expiresAt" to expiryTimestamp
@@ -213,9 +213,20 @@ fun Route.offlineRoutes() {
 
                     try {
                         // Store in offline queue for processing
+                        @Suppress("UNCHECKED_CAST")
+                        val bodyObj = JsonObject(
+                            (txBody as Map<String, Any?>).mapValues { (_, v) ->
+                                when (v) {
+                                    is String -> JsonPrimitive(v)
+                                    is Number -> JsonPrimitive(v)
+                                    is Boolean -> JsonPrimitive(v)
+                                    else -> JsonPrimitive(v.toString())
+                                }
+                            }
+                        )
                         val payloadJson = buildJsonObject {
                             put("endpoint", endpoint)
-                            put("body", Json.parseToJsonElement(Json.encodeToString(txBody)))
+                            put("body", bodyObj)
                         }
 
                         conn.prepareStatement("""

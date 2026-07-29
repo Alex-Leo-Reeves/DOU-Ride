@@ -604,20 +604,20 @@ fun Route.rideRoutes() {
                     if (paymentStatus == "paid") totalPaid += farePaid
                     if (paymentStatus != "paid") allPaid = false
 
-                    passengers.add(mapOf(
+                    passengers.add(mapOf<String, Any?>(
                         "id" to rs.getString("id"),
                         "studentId" to rs.getString("student_id"),
                         "studentName" to rs.getString("student_name"),
-                        "matricNumber" to rs.getString("matric_number") ?: "",
+                        "matricNumber" to (rs.getString("matric_number") ?: ""),
                         "boardingPin" to rs.getString("boarding_pin"),
                         "boardingStatus" to rs.getString("boarding_status"),
                         "paymentStatus" to paymentStatus,
                         "farePaid" to farePaid,
-                        "boardedAt" to rs.getTimestamp("boarded_at")?.toInstant()?.toString() ?: ""
+                        "boardedAt" to (rs.getTimestamp("boarded_at")?.toInstant()?.toString() ?: "")
                     ))
                 }
 
-                call.respond(mapOf(
+                call.respond(mapOf<String, Any>(
                     "passengers" to passengers,
                     "totalPassengers" to passengers.size,
                     "totalPaid" to totalPaid,

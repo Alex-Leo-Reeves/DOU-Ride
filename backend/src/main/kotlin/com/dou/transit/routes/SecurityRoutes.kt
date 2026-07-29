@@ -45,13 +45,13 @@ fun Route.securityRoutes() {
                         val rs = stmt.executeQuery()
                         if (rs.next()) {
                             val isSuspended = rs.getBoolean("is_suspended") || rs.getBoolean("driver_suspended")
-                            result = mapOf(
+                            result = mapOf<String, Any?>(
                                 "id" to rs.getString("id"),
                                 "fullName" to rs.getString("full_name"),
                                 "role" to rs.getString("role"),
                                 "fleetNumber" to rs.getInt("fleet_number"),
                                 "status" to (rs.getString("driver_status") ?: "offline"),
-                                "kekeRegistration" to rs.getString("keke_registration") ?: "",
+                                "kekeRegistration" to (rs.getString("keke_registration") ?: ""),
                                 "isSuspended" to isSuspended,
                                 "suspensionReason" to (rs.getString("suspension_reason") ?: ""),
                                 "isCleared" to !isSuspended
@@ -76,13 +76,13 @@ fun Route.securityRoutes() {
                             val rs = stmt.executeQuery()
                             if (rs.next()) {
                                 val isSuspended = rs.getBoolean("is_suspended") || rs.getBoolean("driver_suspended")
-                                result = mapOf(
+                                result = mapOf<String, Any?>(
                                     "id" to rs.getString("id"),
                                     "fullName" to rs.getString("full_name"),
                                     "role" to rs.getString("role"),
                                     "fleetNumber" to rs.getInt("fleet_number"),
                                     "status" to (rs.getString("driver_status") ?: "offline"),
-                                    "kekeRegistration" to rs.getString("keke_registration") ?: "",
+                                    "kekeRegistration" to (rs.getString("keke_registration") ?: ""),
                                     "isSuspended" to isSuspended,
                                     "suspensionReason" to (rs.getString("suspension_reason") ?: ""),
                                     "isCleared" to !isSuspended
@@ -104,14 +104,14 @@ fun Route.securityRoutes() {
                         stmt.setString(1, "%${matricNumber.trim()}%")
                         val rs = stmt.executeQuery()
                         if (rs.next()) {
-                            result = mapOf(
+                            result = mapOf<String, Any?>(
                                 "id" to rs.getString("id"),
                                 "fullName" to rs.getString("full_name"),
                                 "role" to rs.getString("role"),
                                 "matricNumber" to rs.getString("matric_number"),
-                                "department" to rs.getString("department") ?: "",
-                                "faculty" to rs.getString("faculty") ?: "",
-                                "level" to rs.getString("level") ?: "",
+                                "department" to (rs.getString("department") ?: ""),
+                                "faculty" to (rs.getString("faculty") ?: ""),
+                                "level" to (rs.getString("level") ?: ""),
                                 "isVerified" to rs.getBoolean("is_verified"),
                                 "isSuspended" to rs.getBoolean("is_suspended"),
                                 "suspensionReason" to (rs.getString("suspension_reason") ?: ""),
@@ -133,14 +133,14 @@ fun Route.securityRoutes() {
                         stmt.setString(1, rawData)
                         val rs = stmt.executeQuery()
                         if (rs.next()) {
-                            result = mapOf(
+                            result = mapOf<String, Any?>(
                                 "id" to rs.getString("id"),
                                 "fullName" to rs.getString("full_name"),
                                 "role" to rs.getString("role"),
                                 "matricNumber" to rs.getString("matric_number"),
-                                "department" to rs.getString("department") ?: "",
-                                "faculty" to rs.getString("faculty") ?: "",
-                                "level" to rs.getString("level") ?: "",
+                                "department" to (rs.getString("department") ?: ""),
+                                "faculty" to (rs.getString("faculty") ?: ""),
+                                "level" to (rs.getString("level") ?: ""),
                                 "isSuspended" to rs.getBoolean("is_suspended"),
                                 "suspensionReason" to (rs.getString("suspension_reason") ?: ""),
                                 "isCleared" to !rs.getBoolean("is_suspended")

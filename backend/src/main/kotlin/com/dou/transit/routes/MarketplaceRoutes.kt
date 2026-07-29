@@ -299,13 +299,13 @@ fun Route.marketplaceRoutes() {
                 }
                 val fleetNumber = driverRs.getInt("fleet_number")
 
-                val updated = conn.prepareStatement("""
+                val updated: Int = conn.prepareStatement("""
                     UPDATE delivery_orders SET driver_id = ?::uuid, status = 'in_transit', updated_at = now()
                     WHERE id = ?::uuid AND status = 'ready_for_pickup'
-                """.trimIndent()).apply {
-                    setString(1, req.driverId)
-                    setString(2, req.orderId)
-                    executeUpdate()
+                """.trimIndent()).let { stmt ->
+                    stmt.setString(1, req.driverId)
+                    stmt.setString(2, req.orderId)
+                    stmt.executeUpdate()
                 }
 
                 if (updated == 0) {

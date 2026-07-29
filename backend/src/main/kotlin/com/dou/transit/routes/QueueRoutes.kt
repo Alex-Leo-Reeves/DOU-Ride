@@ -207,7 +207,7 @@ fun Route.queueRoutes() {
                 val rs = stmt.executeQuery()
 
                 if (!rs.next()) {
-                    return@post call.respond(HttpStatusCode.NotFound, ErrorResponse("No active queue entry"))
+                    return@get call.respond(HttpStatusCode.NotFound, ErrorResponse("No active queue entry"))
                 }
 
                 call.respond(QueuePositionResponse(
