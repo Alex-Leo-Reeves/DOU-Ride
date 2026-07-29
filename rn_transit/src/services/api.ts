@@ -10,6 +10,7 @@ interface ApiResponse {
   data?: unknown;
   error?: string;
   details?: string;
+  _backendUnreachable?: boolean;
   [key: string]: unknown;
 }
 
@@ -31,7 +32,8 @@ async function request(
       body: body ? JSON.stringify(body) : undefined,
     };
 
-    const response = await fetch(`${API.baseUrl}${endpoint}`, options);
+    const url = `${API.baseUrl}${endpoint}`;
+    const response = await fetch(url, options);
     const text = await response.text();
     const decoded = text ? JSON.parse(text) : {};
 
@@ -47,10 +49,27 @@ async function request(
       details: decoded.details || `Status ${response.status}`,
     };
   } catch (e: any) {
-    if (e.message?.includes('Network request failed')) {
-      return { error: 'No internet connection' };
+    // Differentiate between no internet and backend unreachable
+    const msg = e.message || '';
+    if (msg.includes('Network request failed') || msg.includes('fetch')) {
+      return {
+        error: 'Cannot reach server',
+        details: `Backend at ${API.baseUrl} is not responding. Check your connection or try again later.`,
+        _backendUnreachable: true,
+      };
     }
-    return { error: e.message || 'Unknown error' };
+    return { error: msg || 'Unknown error', _backendUnreachable: true };
+  }
+}
+
+/** Check if the backend is reachable. Returns null on success or an error string. */
+export async function checkBackendReachable(): Promise<string | null> {
+  try {
+    const res = await fetch(`${API.baseUrl}/api/health`, { method: 'GET' });
+    if (res.ok) return null;
+    return `Backend responded with status ${res.status}`;
+  } catch (e: any) {
+    return `Cannot reach backend at ${API.baseUrl} — ${e.message || 'network error'}`;
   }
 }
 

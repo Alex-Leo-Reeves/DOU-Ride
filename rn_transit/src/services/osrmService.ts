@@ -2,8 +2,9 @@
  * OSRM routing service — fetches driving/walking routes from the OSRM server.
  * Mirrors Flutter's OsmService.
  */
+import { API } from '../config/api';
 
-const OSRM_URL = 'https://dockerfile-dwb2.onrender.com';
+const OSRM_URL = API.osrmUrl;
 
 export interface RoutePoint {
   lat: number;

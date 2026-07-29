@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,27 +10,47 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  Image,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Colors, Spacing, FontSize, BorderRadius, Shadows } from '../../config/theme';
 import { Routes } from '../../config/routes';
 import { useAuthStore } from '../../stores/authStore';
 import { DouCard } from '../../components/DouCard';
+import type { PortalScrapeResult } from './PortalVerificationScreen';
+
+type RegisterRouteParams = {
+  StudentRegister: { portalData?: PortalScrapeResult } | undefined;
+};
 
 export default function StudentRegisterScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<any>>();
+  const route = useRoute<RouteProp<RegisterRouteParams, 'StudentRegister'>>();
   const { registerStudent, isLoading, error, clearError } = useAuthStore();
 
-  const [matric, setMatric] = useState('');
-  const [fullName, setFullName] = useState('');
-  const [department, setDepartment] = useState('');
-  const [faculty, setFaculty] = useState('');
+  const portalData = route.params?.portalData;
+
+  const [matric, setMatric] = useState(portalData?.matricNumber || '');
+  const [fullName, setFullName] = useState(portalData?.fullName || '');
+  const [department, setDepartment] = useState(portalData?.department || '');
+  const [faculty, setFaculty] = useState(portalData?.faculty || '');
   const [phone, setPhone] = useState('');
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(portalData?.email || '');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [localError, setLocalError] = useState('');
+
+  // If portal data arrives via navigation params, pre-fill fields
+  useEffect(() => {
+    if (portalData) {
+      if (portalData.matricNumber) setMatric(portalData.matricNumber);
+      if (portalData.fullName) setFullName(portalData.fullName);
+      if (portalData.department) setDepartment(portalData.department);
+      if (portalData.faculty) setFaculty(portalData.faculty);
+      if (portalData.email) setEmail(portalData.email);
+    }
+  }, [portalData]);
 
   const handleRegister = async () => {
     clearError();

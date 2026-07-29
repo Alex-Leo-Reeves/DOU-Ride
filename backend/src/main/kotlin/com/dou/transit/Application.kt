@@ -106,6 +106,9 @@ fun Application.module() {
 
         // Offline resilience
         offlineRoutes()
+
+        // Payment request routes
+        paymentRequestRoutes()
     }
 
     println("""

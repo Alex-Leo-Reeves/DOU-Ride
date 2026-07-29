@@ -52,16 +52,16 @@ export const useAdminStore = create<AdminState>((set, get) => ({
     try {
       const res = await api.get('/api/admin/analytics', token);
       if (res.error) { set({ isLoading: false, error: res.error as string }); return; }
+      // Backend returns AdminAnalyticsResponse with nested pendingActions
+      const pending = (res.pendingActions as Record<string, unknown>) ?? {};
       set({
         isLoading: false,
         activeKekes: (res.activeKekes as number) ?? 0,
         tripsToday: (res.tripsToday as number) ?? 0,
-        revenueToday: (res.revenueToday as number) ?? 0,
+        revenueToday: (res.platformRevenue as number) ?? 0,
         pendingBankApprovals: (res.pendingBankApprovals as number) ?? 0,
-        pendingReports: (res.pendingReports as number) ?? 0,
-        pendingLostItems: (res.pendingLostItems as number) ?? 0,
-        drivers: (res.drivers as AdminDriver[]) ?? [],
-        students: (res.students as AdminStudent[]) ?? [],
+        pendingReports: (pending.incidentReports as number) ?? 0,
+        pendingLostItems: (pending.lostItemClaims as number) ?? 0,
       });
     } catch (e: any) { set({ isLoading: false, error: e.message }); }
   },

@@ -48,6 +48,7 @@ data class RegisterDriverRequest(
     val fullName: String,
     val phone: String,
     val kekeRegistration: String,
+    val licensePlate: String,
     val maxSeats: Int,
     val facePhotoBase64: String,
     val password: String
@@ -74,6 +75,9 @@ data class PortalScrapeResult(
     val fullName: String,
     val department: String
 )
+
+@Serializable
+data class PortalCheckRequest(val matricNumber: String)
 
 // ============================================================
 // WALLET MODELS
@@ -386,6 +390,34 @@ data class DriverLocationResponse(
     val heading: Double?,
     val speed: Double?
 )
+
+// ============================================================
+// PAYMENT REQUEST MODELS
+// ============================================================
+
+@Serializable
+data class CreatePaymentRequest(
+    val payerId: String,
+    val amount: Double,
+    val description: String? = null,
+    val tripId: String? = null
+)
+
+@Serializable
+data class PaymentRequestResponse(
+    val id: String,
+    val requesterId: String,
+    val requesterName: String,
+    val payerId: String,
+    val payerName: String,
+    val amount: Double,
+    val description: String?,
+    val status: String,
+    val createdAt: String
+)
+
+@Serializable
+data class PaymentRequestAction(val action: String) // "accept" or "deny"
 
 // ============================================================
 // GENERIC RESPONSES

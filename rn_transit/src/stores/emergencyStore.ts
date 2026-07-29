@@ -27,13 +27,18 @@ export const useEmergencyStore = create<EmergencyState>((set, get) => ({
   triggerEmergency: async (lat, lng, phone) => {
     set({ isLoading: true });
     try {
-      const res = await api.post('/api/emergency/trigger', { lat, lng, phone });
+      // Backend expects studentLat, studentLng, studentPhone
+      const res = await api.post('/api/emergency/trigger', {
+        studentLat: lat,
+        studentLng: lng,
+        studentPhone: phone,
+      });
       if (res.error) {
         set({ isLoading: false });
         return false;
       }
       set({
-        incidentId: `emerg-${Date.now()}`,
+        incidentId: (res.incidentId as string) ?? `emerg-${Date.now()}`,
         emergencyStatus: 'active',
         isLoading: false,
       });

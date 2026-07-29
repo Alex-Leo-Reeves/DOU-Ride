@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -11,17 +11,22 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Colors, Spacing, FontSize, BorderRadius, Shadows } from '../../config/theme';
 import { Routes } from '../../config/routes';
 import { useAuthStore } from '../../stores/authStore';
 
+type LoginRouteParams = {
+  Login: { prefilledEmail?: string } | undefined;
+};
+
 export default function LoginScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<any>>();
+  const route = useRoute<RouteProp<LoginRouteParams, 'Login'>>();
   const { login, isLoading, error, clearError } = useAuthStore();
 
-  const [identifier, setIdentifier] = useState('');
+  const [identifier, setIdentifier] = useState(route.params?.prefilledEmail || '');
   const [password, setPassword] = useState('');
   const [localError, setLocalError] = useState('');
 
@@ -41,8 +46,6 @@ export default function LoginScreen() {
     const success = await login(identifier.trim(), password);
 
     if (success) {
-      // The auth store handles navigation based on role
-      // But we reset to appropriate home screen
       navigation.reset({ index: 0, routes: [{ name: 'MainApp' }] });
     }
   };
@@ -99,6 +102,14 @@ export default function LoginScreen() {
               ) : (
                 <Text style={styles.submitText}>Log In</Text>
               )}
+            </TouchableOpacity>
+
+            {/* Login via DOU Portal */}
+            <TouchableOpacity
+              style={styles.portalLoginButton}
+              onPress={() => navigation.navigate(Routes.portalVerification, { fromLogin: true })}
+            >
+              <Text style={styles.portalLoginText}>🎓 Login via DOU Portal</Text>
             </TouchableOpacity>
           </View>
 
@@ -182,6 +193,20 @@ const styles = StyleSheet.create({
     color: Colors.white,
     fontSize: FontSize.lg,
     fontWeight: 'bold',
+  },
+  portalLoginButton: {
+    marginTop: 12,
+    borderRadius: BorderRadius.md,
+    padding: 14,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: Colors.black,
+    backgroundColor: Colors.white,
+  },
+  portalLoginText: {
+    color: Colors.black,
+    fontSize: FontSize.md,
+    fontWeight: '600',
   },
   registerLink: {
     marginTop: 24,

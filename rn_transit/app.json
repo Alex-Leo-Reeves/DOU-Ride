@@ -1,28 +1,37 @@
 {
-    "expo": {
-        "name": "DOU Transit",
-        "slug": "dou-transit",
-        "version": "1.0.0",
-        "orientation": "portrait",
-        "icon": "./assets/dou-logo.jpeg",
-        "userInterfaceStyle": "light",
-        "splash": {
-            "backgroundColor": "#FFFFFF"
-        },
-        "ios": {
-            "supportsTablet": true,
-            "bundleIdentifier": "com.dou.transit"
-        },
-        "android": {
-            "adaptiveIcon": {
-                "backgroundColor": "#FFFFFF"
-            },
-            "package": "com.dou.transit"
-        },
-        "plugins": [
-            "expo-location",
-            "expo-secure-store",
-            "expo-asset"
-        ]
-    }
+  "expo": {
+    "name": "DOU Transit",
+    "slug": "iammad1",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/dou-logo.png",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.dou.transit"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#FFFFFF"
+      },
+      "package": "com.dou.transit",
+      "permissions": [
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
+      ]
+    },
+    "plugins": [
+      "expo-location",
+      "expo-secure-store",
+      "expo-asset",
+      "expo-font",
+      "expo-web-browser"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "b4e1b886-1a50-4164-b150-a3ab7e352cfd"
+      }
+    },
+    "owner": "iammad1s-team"
+  }
 }

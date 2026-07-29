@@ -1,17 +1,24 @@
 /// API and backend configuration for the Flutter app.
 class ApiConfig {
   /// The backend API base URL.
-  /// In development, this could be localhost; in production, the Render URL.
+  /// On emulator: http://10.0.2.2:8080 maps to host localhost.
+  /// On real device/web: use the Render deployment URL.
   static const String baseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'http://10.0.2.2:8080', // Android emulator -> host
+    defaultValue: 'https://dou-transit-api.onrender.com',
   );
+
+  /// Render backend URL for fallback/diagnostics.
+  static const String renderBaseUrl = 'https://dou-transit-api.onrender.com';
+
+  /// Local emulator URL.
+  static const String emulatorBaseUrl = 'http://10.0.2.2:8080';
 
   /// Supabase project URL.
   static const String supabaseUrl =
       'https://uawbhgrxmvwrhncpophm.supabase.co';
 
-  /// Supabase anon key.
+  /// Supabase anon key — used for auth signup/signin (NOT the service role key).
   static const String supabaseAnonKey =
       'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVhd2JoZ3J4bXZ3cmhuY3BvcGhtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM4OTU2NTYsImV4cCI6MjA5OTQ3MTY1Nn0.FVeao1ms3_N2aUhGSiiEIk7sYY8pZLWCWj5dDItYXcQ';
 
@@ -37,4 +44,7 @@ class ApiConfig {
   /// Timeouts
   static const int queueCallTimeoutSeconds = 120;
   static const int locationUpdateIntervalMs = 5000;
+
+  /// DOU Portal URL for student verification
+  static const String douPortalUrl = 'https://dou.edu.ng/portal';
 }

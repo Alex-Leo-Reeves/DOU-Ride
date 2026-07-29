@@ -167,16 +167,17 @@ fun Route.authRoutes() {
 
                     // Insert driver_details
                     conn.prepareStatement("""
-                        INSERT INTO driver_details (id, user_id, keke_registration, fleet_number, max_seats, face_photo_url, verification_qr_code, status)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, 'idle')
+                        INSERT INTO driver_details (id, user_id, keke_registration, license_plate, fleet_number, max_seats, face_photo_url, verification_qr_code, status)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'idle')
                     """).apply {
                         setObject(1, UUID.randomUUID())
                         setObject(2, UUID.fromString(userId))
                         setString(3, req.kekeRegistration)
-                        setInt(4, fleetNumber)
-                        setInt(5, req.maxSeats)
-                        setString(6, "face_photos/$userId.jpg")
-                        setString(7, qrCodeData)
+                        setString(4, req.licensePlate)
+                        setInt(5, fleetNumber)
+                        setInt(6, req.maxSeats)
+                        setString(7, "face_photos/$userId.jpg")
+                        setString(8, qrCodeData)
                         executeUpdate()
                     }
 
@@ -298,6 +299,39 @@ fun Route.authRoutes() {
                 fullName = fullName,
                 needsOnboarding = needsOnboarding
             ))
+        }
+
+        // ============================================================
+        // POST /api/auth/portal-check
+        // Check if a student already has an account by matric number.
+        // Returns { exists: boolean, email?: string } so the app can
+        // route to login vs registration after portal scraping.
+        // ============================================================
+        post("/portal-check") {
+            val req = try { call.receive<PortalCheckRequest>() }
+            catch (e: Exception) { return@post call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid body")) }
+
+            try {
+                DatabaseService.getConnection().use { conn ->
+                    val rs = conn.prepareStatement("""
+                        SELECT p.email
+                        FROM profiles p
+                        JOIN student_details s ON s.user_id = p.id
+                        WHERE s.matric_number = ? AND p.role = 'student'
+                        LIMIT 1
+                    """).apply {
+                        setString(1, req.matricNumber)
+                    }.executeQuery()
+
+                    if (rs.next()) {
+                        call.respond(mapOf("exists" to true, "email" to rs.getString("email")))
+                    } else {
+                        call.respond(mapOf("exists" to false))
+                    }
+                }
+            } catch (e: Exception) {
+                call.respond(mapOf("exists" to false, "error" to (e.message ?: "DB error")))
+            }
         }
 
         // ============================================================

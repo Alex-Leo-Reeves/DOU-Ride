@@ -20,8 +20,8 @@ interface LocationState {
   setCurrentLocation: (lat: number, lng: number) => void;
   startTracking: () => Promise<boolean>;
   stopTracking: () => void;
-  updateDriverLocation: (lat: number, lng: number) => Promise<void>;
-  fetchDriverLocations: () => Promise<void>;
+  updateDriverLocation: (lat: number, lng: number, token?: string | null) => Promise<void>;
+  fetchDriverLocations: (token?: string | null) => Promise<void>;
 }
 
 export const useLocationStore = create<LocationState>((set) => ({
@@ -51,17 +51,22 @@ export const useLocationStore = create<LocationState>((set) => ({
 
   stopTracking: () => set({ isTracking: false }),
 
-  updateDriverLocation: async (lat, lng) => {
+  updateDriverLocation: async (lat, lng, token?: string | null) => {
     set({ currentLat: lat, currentLng: lng });
-    // await api.post('/api/driver/location', { lat, lng });
+    // Backend expects { latitude, longitude } matching UpdateLocationRequest
+    await api.post('/api/driver/update-location', { latitude: lat, longitude: lng }, token);
   },
 
-  fetchDriverLocations: async () => {
+  fetchDriverLocations: async (token?: string | null) => {
     set({ isLoading: true });
     try {
-      const res = await api.get('/api/driver/location');
-      if (res.data) {
-        set({ driverLocations: res.data as DriverLocation[] });
+      const res = await api.get('/api/driver/location', token);
+      // Backend returns array of DriverLocationResponse directly (not wrapped in {data})
+      const data = res.data ?? (Array.isArray(res) ? res : undefined);
+      if (Array.isArray(data)) {
+        set({ driverLocations: data as DriverLocation[] });
+      } else if (Array.isArray(res)) {
+        set({ driverLocations: res as unknown as DriverLocation[] });
       }
     } catch {
       // silently fail

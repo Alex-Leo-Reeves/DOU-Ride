@@ -48,6 +48,7 @@ CREATE TABLE driver_details (
     id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id             UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
     keke_registration   TEXT UNIQUE NOT NULL,
+    license_plate       TEXT,
     fleet_number        INTEGER UNIQUE NOT NULL,
     face_photo_url      TEXT,
     verification_qr_code TEXT UNIQUE,
@@ -313,6 +314,50 @@ CREATE TABLE notification_history (
     is_read         BOOLEAN NOT NULL DEFAULT false,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- ============================================================
+-- 19. PROFILE EDIT REQUESTS
+-- Students and drivers can request admin approval to edit
+-- their profile details (name, phone, email, department, etc.)
+-- ============================================================
+CREATE TABLE profile_edit_requests (
+    id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id           UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+    role              TEXT NOT NULL CHECK (role IN ('student','driver')),
+    requested_changes JSONB NOT NULL,
+    reason            TEXT,
+    status            TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected')),
+    reviewed_by       UUID REFERENCES profiles(id),
+    review_note       TEXT,
+    created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at        TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_profile_edit_user ON profile_edit_requests(user_id);
+CREATE INDEX idx_profile_edit_status ON profile_edit_requests(status);
+
+-- ============================================================
+-- 20. PAYMENT REQUESTS
+-- A user can request someone else to pay for a ride/wallet top-up.
+-- The recipient can accept or deny the request.
+-- ============================================================
+CREATE TABLE payment_requests (
+    id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    requester_id      UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+    payer_id          UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+    amount            DECIMAL(12,2) NOT NULL,
+    description       TEXT,
+    trip_id           UUID REFERENCES trips(id),
+    status            TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','accepted','denied','cancelled')),
+    accepted_at       TIMESTAMPTZ,
+    denied_at         TIMESTAMPTZ,
+    created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at        TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_payment_req_requester ON payment_requests(requester_id);
+CREATE INDEX idx_payment_req_payer ON payment_requests(payer_id);
+CREATE INDEX idx_payment_req_status ON payment_requests(status);
 
 -- ============================================================
 -- INDEXES FOR PERFORMANCE

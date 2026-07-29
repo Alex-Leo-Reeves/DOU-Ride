@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,11 +6,16 @@ import {
   SafeAreaView,
   TouchableOpacity,
   ActivityIndicator,
+  ScrollView,
+  Image,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { WebView, WebViewNavigation } from 'react-native-webview';
 import { Colors, FontSize, BorderRadius, Shadows } from '../../config/theme';
+import { API } from '../../config/api';
+import { api } from '../../services/api';
+import { useAuthStore } from '../../stores/authStore';
 
 export interface PortalScrapeResult {
   matricNumber: string;
@@ -22,16 +27,32 @@ export interface PortalScrapeResult {
   profileImageBase64?: string;
 }
 
+type PortalRouteParams = {
+  PortalVerification: { fromLogin?: boolean } | undefined;
+};
+
 export default function PortalVerificationScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<any>>();
+  const route = useRoute<RouteProp<PortalRouteParams, 'PortalVerification'>>();
+  const { login } = useAuthStore();
+
   const [showWebView, setShowWebView] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [result, setResult] = useState<PortalScrapeResult | null>(null);
+  const [loginLoading, setLoginLoading] = useState(false);
+  const [loginError, setLoginError] = useState('');
+  const [existingUser, setExistingUser] = useState<{
+    exists: boolean;
+    email?: string;
+  } | null>(null);
   const webViewRef = useRef<WebView>(null);
   const scrapeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scrapeCount = useRef(0);
 
-  const DOU_PORTAL_URL = 'https://myportal.dou.edu.ng/';
+  const DOU_PORTAL_URL = API.douPortalUrl;
+
+  // Determine if opened from login screen (vs registration)
+  const fromLogin = route.params?.fromLogin ?? false;
 
   const SCRAPER_JS = `
 (function() {
@@ -40,13 +61,20 @@ export default function PortalVerificationScreen() {
     let faculty = ''; let level = ''; let email = '';
     let profileImage = '';
 
-    // Find profile image
+    // Find profile images
     document.querySelectorAll('img').forEach(img => {
       const s = (img.src||'').toLowerCase();
       const a = (img.alt||'').toLowerCase();
-      if ((s.includes('profile')||s.includes('photo')||a.includes('profile')||a.includes('photo')) && !s.includes('logo'))
+      if ((s.includes('profile')||s.includes('photo')||a.includes('profile')||a.includes('photo')||a.includes('student')) && !s.includes('logo'))
         profileImage = img.src;
     });
+
+    // If no profile image found, try to capture avatar/img in student profile area
+    if (!profileImage) {
+      document.querySelectorAll('.profile-area img, .student-card img, .avatar img').forEach(img => {
+        profileImage = img.src;
+      });
+    }
 
     // Layout 1: Tables
     document.querySelectorAll('table tr').forEach(tr => {
@@ -54,8 +82,8 @@ export default function PortalVerificationScreen() {
       if (cells.length >= 2) {
         const l = cells[0].innerText.trim().toLowerCase();
         const v = cells[cells.length-1].innerText.trim();
-        if (l.includes('name')) name = v;
-        if (l.includes('matric')||l.includes('reg no')||l.includes('reg number')) matric = v;
+        if (l.includes('name')||l.includes('full name')||l.includes('student name')) name = v;
+        if (l.includes('matric')||l.includes('reg no')||l.includes('reg number')||l.includes('admission')) matric = v;
         if (l.includes('department')||l.includes('dept')) dept = v;
         if (l.includes('faculty')) faculty = v;
         if (l.includes('level')||l.includes('year')) level = v;
@@ -67,7 +95,7 @@ export default function PortalVerificationScreen() {
     if (!name) document.querySelectorAll('dt, .label, .field-label').forEach(el => {
       const l = el.innerText.trim().toLowerCase();
       const v = (el.nextElementSibling?.innerText||el.querySelector('dd, .value')?.innerText||'').trim();
-      if (l.includes('name')) name = v;
+      if (l.includes('name')||l.includes('student name')) name = v;
       if (l.includes('matric')||l.includes('reg')) matric = v;
       if (l.includes('department')||l.includes('dept')) dept = v;
       if (l.includes('faculty')) faculty = v;
@@ -100,8 +128,8 @@ export default function PortalVerificationScreen() {
       if (id.includes('email')||n.includes('email')) email = v;
     });
 
-    // Layout 5: Card/panel text
-    if (!name) document.querySelectorAll('.card, .panel, .box, .student-card').forEach(card => {
+    // Layout 5: Card/panel text with colons
+    if (!name) document.querySelectorAll('.card, .panel, .box, .student-card, .profile-panel').forEach(card => {
       card.innerText.split('\\n').forEach(line => {
         const p = line.split(':');
         if (p.length===2) {
@@ -117,7 +145,7 @@ export default function PortalVerificationScreen() {
       });
     });
 
-    // Heading
+    // Layout 6: Heading
     if (!name) {
       const h = document.querySelector('h1, h2, .page-title, .student-name');
       if (h) name = h.innerText.trim();
@@ -164,11 +192,9 @@ export default function PortalVerificationScreen() {
 
   const handleNavigationStateChange = useCallback(
     (navState: WebViewNavigation) => {
-      const url = navState.url;
-      const isLogin = url.includes('login') || url === DOU_PORTAL_URL;
-      const loggedIn = !isLogin && url.startsWith('https://myportal.dou.edu.ng');
-
-      if (loggedIn && !result) {
+      if (navState.loading) return;
+      // After page loaded, inject scraper with a delay
+      if (navState.url && navState.url.startsWith('https://') && !navState.url.includes('login') && !result) {
         if (scrapeTimerRef.current) clearTimeout(scrapeTimerRef.current);
         scrapeTimerRef.current = setTimeout(injectScraper, 2000);
       }
@@ -176,13 +202,51 @@ export default function PortalVerificationScreen() {
     [injectScraper, result],
   );
 
-  const handleUseData = () => {
+  /** Check if the scraped student already has an account */
+  const checkExistingAccount = useCallback(async (matric: string) => {
+    try {
+      const res = await api.post('/api/auth/portal-check', { matricNumber: matric });
+      if (res.exists) {
+        setExistingUser({ exists: true, email: res.email as string });
+      } else {
+        setExistingUser({ exists: false });
+      }
+    } catch {
+      // If backend unreachable, default to no existing account
+      setExistingUser({ exists: false });
+    }
+  }, []);
+
+  useEffect(() => {
+    if (result && result.matricNumber) {
+      checkExistingAccount(result.matricNumber);
+    }
+  }, [result, checkExistingAccount]);
+
+  /** Called when user presses "Create Account" after portal verification */
+  const goToRegistration = () => {
     if (!result) return;
     navigation.navigate('StudentRegister', { portalData: result });
   };
 
+  /** Called when user presses "Log In" (existing account found) */
+  const handleLogin = async () => {
+    if (!result || !existingUser?.email) return;
+    setLoginLoading(true);
+    setLoginError('');
+
+    // Try to log in — the password will be asked in the login screen
+    // Navigate to login with pre-filled email
+    navigation.navigate('Login', {
+      prefilledEmail: existingUser.email,
+    });
+    setLoginLoading(false);
+  };
+
   const retry = () => {
     setResult(null);
+    setExistingUser(null);
+    setLoginError('');
     scrapeCount.current = 0;
     setTimeout(injectScraper, 1000);
   };
@@ -191,38 +255,89 @@ export default function PortalVerificationScreen() {
     <SafeAreaView style={styles.container}>
       {showWebView ? (
         <View style={{ flex: 1 }}>
+          {/* header */}
           <View style={styles.webViewHeader}>
             <TouchableOpacity
-              onPress={() => { setShowWebView(false); setResult(null); }}
+              onPress={() => { setShowWebView(false); setResult(null); setExistingUser(null); }}
             >
               <Text style={styles.webViewBack}>← Close</Text>
             </TouchableOpacity>
             {isLoading && <ActivityIndicator color={Colors.black} size="small" />}
-            {result ? (
-              <TouchableOpacity onPress={handleUseData}>
-                <Text style={styles.useDataBtn}>✓ Use Data</Text>
-              </TouchableOpacity>
-            ) : (
+            {!result ? (
               <TouchableOpacity onPress={retry}>
                 <Text style={styles.retryBtn}>↻ Retry</Text>
               </TouchableOpacity>
-            )}
+            ) : null}
           </View>
 
+          {/* result preview + action */}
           {result && (
-            <View style={styles.resultPreview}>
-              <Text style={styles.resultTitle}>Profile Found</Text>
-              <Field label="Name" value={result.fullName} />
-              <Field label="Matric" value={result.matricNumber} />
-              <Field label="Department" value={result.department} />
-              <Field label="Faculty" value={result.faculty} />
-              <Field label="Level" value={result.level || 'N/A'} />
-              {result.email ? <Field label="Email" value={result.email} /> : null}
-              {result.profileImageBase64 ? <Field label="Photo" value="✓ Captured" /> : null}
-            </View>
+            <ScrollView style={styles.resultContainer}>
+              <View style={styles.resultCard}>
+                <Text style={styles.resultTitle}>✅ Profile Found</Text>
+                {result.profileImageBase64 ? (
+                  <Image
+                    source={{ uri: result.profileImageBase64 }}
+                    style={styles.profilePic}
+                    resizeMode="cover"
+                  />
+                ) : null}
+                <Field label="Name" value={result.fullName} />
+                <Field label="Matric" value={result.matricNumber} />
+                <Field label="Department" value={result.department} />
+                <Field label="Faculty" value={result.faculty} />
+                <Field label="Level" value={result.level || 'N/A'} />
+                {result.email ? <Field label="Email" value={result.email} /> : null}
+
+                <View style={styles.actionsContainer}>
+                  {/* User already has an account → Login */}
+                  {existingUser?.exists ? (
+                    <>
+                      <Text style={styles.existingText}>
+                        You already have an account ({existingUser.email}). Log in to continue.
+                      </Text>
+                      <TouchableOpacity
+                        style={[styles.actionBtn, styles.loginBtn]}
+                        onPress={handleLogin}
+                        disabled={loginLoading}
+                      >
+                        {loginLoading ? (
+                          <ActivityIndicator color={Colors.white} />
+                        ) : (
+                          <Text style={styles.actionBtnText}>Log In</Text>
+                        )}
+                      </TouchableOpacity>
+                      {loginError ? <Text style={styles.errorText}>{loginError}</Text> : null}
+                    </>
+                  ) : existingUser === null ? (
+                    <ActivityIndicator color={Colors.black} style={{ margin: 12 }} />
+                  ) : (
+                    <>
+                      <Text style={styles.newUserText}>
+                        No existing account found. Create one with these details.
+                      </Text>
+                      <TouchableOpacity
+                        style={[styles.actionBtn, styles.createBtn]}
+                        onPress={goToRegistration}
+                      >
+                        <Text style={styles.actionBtnText}>Create Account</Text>
+                      </TouchableOpacity>
+                    </>
+                  )}
+
+                  <TouchableOpacity
+                    style={[styles.actionBtn, styles.cancelBtn]}
+                    onPress={() => { setShowWebView(false); setResult(null); setExistingUser(null); }}
+                  >
+                    <Text style={[styles.actionBtnText, styles.cancelBtnText]}>Cancel</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </ScrollView>
           )}
 
-          <View style={{ flex: 1 }}>
+          {/* WebView */}
+          <View style={{ flex: result ? 0 : 1, height: result ? 200 : undefined }}>
             <WebView
               ref={webViewRef}
               source={{ uri: DOU_PORTAL_URL }}
@@ -236,20 +351,22 @@ export default function PortalVerificationScreen() {
             />
           </View>
 
-          <View style={styles.webViewFooter}>
-            <Text style={styles.footerText}>
-              {result
-                ? 'Tap "Use Data" to continue registration.'
-                : 'Log into the portal. Your profile will be auto-detected.'}
-            </Text>
-          </View>
+          {!result && (
+            <View style={styles.webViewFooter}>
+              <Text style={styles.footerText}>
+                Log into the portal. Your profile will be auto-detected.
+              </Text>
+            </View>
+          )}
         </View>
       ) : (
         <View style={styles.content}>
           <Text style={styles.icon}>🎓</Text>
           <Text style={styles.title}>Verify via DOU Portal</Text>
           <Text style={styles.subtitle}>
-            Open the DOU Student Portal to verify your details automatically.
+            {fromLogin
+              ? 'Log into the DOU Portal to auto-fill your details and sign in.'
+              : 'Open the DOU Student Portal to verify your details automatically.'}
           </Text>
           <TouchableOpacity
             style={styles.openButton}
@@ -257,8 +374,10 @@ export default function PortalVerificationScreen() {
           >
             <Text style={styles.openButtonText}>Open Portal</Text>
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => navigation.goBack()}>
-            <Text style={styles.skipText}>Skip portal verification</Text>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={{ marginTop: 16 }}>
+            <Text style={styles.skipText}>
+              {fromLogin ? 'Back to Login' : 'Skip portal verification'}
+            </Text>
           </TouchableOpacity>
         </View>
       )}
@@ -283,22 +402,30 @@ const styles = StyleSheet.create({
   subtitle: { fontSize: FontSize.md, color: Colors.grey, textAlign: 'center', marginVertical: 16, lineHeight: 22 },
   openButton: { backgroundColor: Colors.black, paddingVertical: 16, paddingHorizontal: 48, borderRadius: BorderRadius.md, ...Shadows.lg },
   openButtonText: { color: Colors.white, fontSize: FontSize.lg, fontWeight: 'bold' },
-  skipText: { color: Colors.grey, fontSize: FontSize.sm, marginTop: 16, textDecorationLine: 'underline' },
+  skipText: { color: Colors.grey, fontSize: FontSize.sm, textDecorationLine: 'underline' },
   webViewHeader: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
     padding: 12, borderBottomWidth: 2, borderBottomColor: Colors.black, backgroundColor: Colors.white,
   },
   webViewBack: { fontSize: FontSize.md, color: Colors.black, fontWeight: '600' },
-  useDataBtn: { fontSize: FontSize.md, color: Colors.success, fontWeight: 'bold' },
   retryBtn: { fontSize: FontSize.md, color: Colors.black, fontWeight: '600' },
-  resultPreview: {
-    margin: 8, padding: 12, backgroundColor: '#e8f5e9', borderRadius: BorderRadius.md,
-    borderWidth: 2, borderColor: Colors.success,
-  },
+  resultContainer: { maxHeight: 320, backgroundColor: '#f0f8f0' },
+  resultCard: { margin: 8, padding: 16, backgroundColor: '#e8f5e9', borderRadius: BorderRadius.md, borderWidth: 2, borderColor: Colors.success },
   resultTitle: { fontSize: FontSize.lg, fontWeight: 'bold', color: Colors.black, marginBottom: 8 },
+  profilePic: { width: 64, height: 64, borderRadius: 32, alignSelf: 'center', marginBottom: 8, borderWidth: 2, borderColor: Colors.black },
   fieldRow: { flexDirection: 'row', paddingVertical: 2 },
   fieldLabel: { width: 90, fontSize: FontSize.sm, color: Colors.grey },
   fieldValue: { flex: 1, fontSize: FontSize.sm, fontWeight: '500', color: Colors.black },
+  actionsContainer: { marginTop: 16, gap: 8 },
+  existingText: { fontSize: FontSize.sm, color: Colors.info, textAlign: 'center', marginBottom: 8 },
+  newUserText: { fontSize: FontSize.sm, color: Colors.grey, textAlign: 'center', marginBottom: 8 },
+  actionBtn: { paddingVertical: 12, borderRadius: BorderRadius.md, alignItems: 'center' },
+  loginBtn: { backgroundColor: Colors.black },
+  createBtn: { backgroundColor: Colors.success },
+  cancelBtn: { backgroundColor: Colors.white, borderWidth: 1.5, borderColor: Colors.grey },
+  actionBtnText: { color: Colors.white, fontSize: FontSize.md, fontWeight: 'bold' },
+  cancelBtnText: { color: Colors.grey },
+  errorText: { color: Colors.error, fontSize: FontSize.sm, textAlign: 'center' },
   webViewFooter: { padding: 12, backgroundColor: Colors.black },
   footerText: { color: Colors.white, fontSize: FontSize.sm, textAlign: 'center' },
 });

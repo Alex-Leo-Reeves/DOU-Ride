@@ -26,23 +26,22 @@ export default function DriverRegisterScreen() {
   const [fullName, setFullName] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [vehicleReg, setVehicleReg] = useState(''); // keke registration
+  const [licensePlate, setLicensePlate] = useState(''); // license plate
   const [localError, setLocalError] = useState('');
 
   // Image picker placeholder — actual implementation would use expo-image-picker
   const [photoUri, setPhotoUri] = useState<string | null>(null);
 
   const handlePickImage = async () => {
-    // In a real implementation:
-    // const result = await ImagePicker.launchImageLibraryAsync({ ... });
-    // if (!result.canceled) setPhotoUri(result.assets[0].uri);
-    setLocalError('Please implement with expo-image-picker');
+    setLocalError('Face photo: use expo-image-picker');
   };
 
   const handleRegister = async () => {
     clearError();
     setLocalError('');
 
-    if (!phone.trim() || !fullName.trim() || !password.trim()) {
+    if (!phone.trim() || !fullName.trim() || !password.trim() || !vehicleReg.trim() || !licensePlate.trim()) {
       setLocalError('All fields are required');
       return;
     }
@@ -58,11 +57,12 @@ export default function DriverRegisterScreen() {
     const data: Record<string, unknown> = {
       phone: phone.trim(),
       fullName: fullName.trim(),
+      kekeRegistration: vehicleReg.trim(),
+      licensePlate: licensePlate.trim(),
+      maxSeats: 4,
+      facePhotoBase64: '',
       password,
     };
-    if (photoUri) {
-      data.facePhoto = photoUri;
-    }
 
     const success = await registerDriver(data);
 
@@ -119,6 +119,26 @@ export default function DriverRegisterScreen() {
               onChangeText={setFullName}
               placeholder="e.g. John Driver"
               placeholderTextColor={Colors.lightGrey}
+            />
+
+            <Text style={styles.label}>Vehicle Registration (Keke)</Text>
+            <TextInput
+              style={styles.input}
+              value={vehicleReg}
+              onChangeText={setVehicleReg}
+              placeholder="e.g. DDD-567-XY"
+              placeholderTextColor={Colors.lightGrey}
+              autoCapitalize="characters"
+            />
+
+            <Text style={styles.label}>License Plate Number</Text>
+            <TextInput
+              style={styles.input}
+              value={licensePlate}
+              onChangeText={setLicensePlate}
+              placeholder="e.g. ABC-123-DE"
+              placeholderTextColor={Colors.lightGrey}
+              autoCapitalize="characters"
             />
 
             <Text style={styles.label}>Password</Text>
