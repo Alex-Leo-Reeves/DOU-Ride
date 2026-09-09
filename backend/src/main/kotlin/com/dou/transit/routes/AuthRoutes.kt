@@ -24,8 +24,8 @@ fun Route.authRoutes() {
         post("/register/student") {
             val req = call.receive<RegisterStudentRequest>()
 
-            // 1. Create auth user in Supabase
-            val authResult = SupabaseAuthService.signUp(
+            // 1. Create auth user in Supabase (using admin API to avoid rate limits)
+            val authResult = SupabaseAuthService.adminCreateUser(
                 email = req.email,
                 password = req.password,
                 metadata = mapOf(
@@ -111,8 +111,8 @@ fun Route.authRoutes() {
             // Use phone as email for Supabase auth (drivers may not have email)
             val driverEmail = "${req.phone.replace(Regex("[^0-9]"), "")}@driver.dou.transit"
 
-            // 1. Create auth user
-            val authResult = SupabaseAuthService.signUp(
+            // 1. Create auth user (using admin API to avoid rate limits)
+            val authResult = SupabaseAuthService.adminCreateUser(
                 email = driverEmail,
                 password = req.password,
                 metadata = mapOf(
