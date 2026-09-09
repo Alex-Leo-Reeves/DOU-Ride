@@ -14,8 +14,13 @@ object AppConfig {
         ?: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVhd2JoZ3J4bXZ3cmhuY3BvcGhtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4Mzg5NTY1NiwiZXhwIjoyMDk5NDcxNjU2fQ.Ehgn9JGlTHoCkCxHml5QzXBpLaW1_ZRZoHjS3liDFsY"
     val supabaseJwksUrl: String = "$supabaseUrl/auth/v1/.well-known/jwks.json"
     val supabaseDbPassword: String = System.getenv("SUPABASE_DB_PASSWORD") ?: "iammasteralexd1$"
-    val supabaseDbUrl: String = System.getenv("DATABASE_URL")
-        ?: "jdbc:postgresql://aws-0-eu-west-1.pooler.supabase.com:6543/postgres?user=postgres.uawbhgrxmvwrhncpophm&password=$supabaseDbPassword"
+    val supabaseDbUrl: String = (System.getenv("DATABASE_URL")
+        ?: "jdbc:postgresql://aws-0-eu-west-1.pooler.supabase.com:6543/postgres?user=postgres.uawbhgrxmvwrhncpophm&password=$supabaseDbPassword")
+        .let { url ->
+            if (url.startsWith("postgres://")) url.replaceFirst("postgres://", "jdbc:postgresql://")
+            else if (url.startsWith("postgresql://")) url.replaceFirst("postgresql://", "jdbc:postgresql://")
+            else url
+        }
 
     // Flutterwave
     val flutterwaveSecretKey: String = System.getenv("FLUTTERWAVE_SECRET_KEY")
