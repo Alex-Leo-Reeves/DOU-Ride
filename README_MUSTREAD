@@ -1,0 +1,94 @@
+# DOU Transit (Campus Super App) - Final Year Project Documentation
+
+**FOLLOW MY INSTRUCTIONS.**
+*i am a nigerian student of dou and this is my final year project so all works, errors, fixes, relevances, importance, tools, stacks already done or to be done in the future must be updated inside this file following the nigerian format for writing final year project because i will be using it.*
+
+---
+
+## CHAPTER ONE: INTRODUCTION
+
+### 1.1 Background of the Study
+Transportation within the Dennis Osadebay University (DOU) campus heavily relies on commercial tricycles (Kekes). However, the manual system of boarding, paying with cash, and tracking security poses significant challenges for both students and the university administration. The DOU Transit Super App is proposed to digitize and manage the entire ecosystem.
+
+### 1.2 Statement of the Problem
+- Unregistered Keke drivers posing security risks to students.
+- Inefficient cash transactions leading to delays and "change" disputes.
+- Chaotic Keke parks during rush hours.
+- Difficulty in tracking and recovering lost items inside campus Kekes.
+
+### 1.3 Aims and Objectives of the Study
+The main aim of this project is to develop a Campus Super App for DOU. Specific objectives include:
+1. To develop a robust React Native (Expo) frontend for Students, Drivers, and Admin.
+2. To build a secure Kotlin (Ktor) backend connected to a Supabase PostgreSQL database.
+3. To implement a digital wallet system for cashless payments.
+4. To create a virtual queue and real-time mapping system using OSRM.
+
+### 1.4 Significance of the Study
+This system provides Student Affairs with a digital pass system, ensures 100% security clearance for all campus drivers, and creates a seamless transport experience for students.
+
+---
+
+## CHAPTER TWO: LITERATURE REVIEW
+
+### 2.1 Conceptual Review
+Ride-hailing applications have transformed urban mobility. However, campus micro-transit systems require hyper-localized solutions. Existing apps like Uber or Bolt do not account for physical campus gates, student wallets, or virtual queues at designated faculties.
+
+### 2.2 Empirical Review
+Previous implementations of campus transport apps often suffer from poor adoption because they ignore driver resistance. This project pivots by making the app an administrative security requirement enforced by Student Affairs, rather than just a convenience tool.
+
+---
+
+## CHAPTER THREE: RESEARCH METHODOLOGY
+
+### 3.1 Research Design
+The Agile software development methodology was adopted to allow iterative improvements to the UI and backend logic.
+
+### 3.2 System Architecture & Tech Stack
+- **Frontend:** React Native (Expo) replacing Flutter for better web/PWA compatibility and cross-platform performance.
+- **Backend:** Kotlin (Ktor) deployed via Docker.
+- **Database:** Supabase (PostgreSQL) with Row Level Security (RLS).
+- **Mapping:** OpenStreetMap (OSM) and OSRM for custom campus routing.
+- **State Management:** Zustand (React Native).
+
+### 3.3 Method of Data Collection
+GPS coordinates for DOU faculties and gates were mapped using Osmium. Driver and student records are managed via Supabase Auth.
+
+---
+
+## CHAPTER FOUR: RESULTS AND DISCUSSION
+
+### 4.1 Implementation of Features (Works Done & Stacks Used)
+- **Authentication:** Migrated from Flutter to React Native using Zustand `authStore`. Role-based routing implemented for Students, Drivers, Security, and Admin.
+- **Location Tracking (Fixes & Improvements):** Integrated `expo-location` to request foreground permissions and track driver/student coordinates seamlessly.
+- **Wallet System:** A digital wallet allowing deposits, withdrawals, and internal campus transfers was successfully linked to the backend API.
+- **Lost & Found:** A dedicated module for tracking items forgotten in Kekes, integrated with Student Affairs administrative dashboard.
+
+### 4.2 Codebase Refactoring & Architecture Improvements
+- **Wallet Module Modularization:** The monolithic `StudentWalletScreen.tsx` contained all deposit, withdrawal, and transfer modal logic inline (~180+ lines of Modal JSX). Refactored into a dedicated `components/wallet/` module with: `WalletBottomSheet.tsx` (reusable animated bottom sheet), `DepositSheet.tsx`, `WithdrawSheet.tsx`, `TransferSheet.tsx`, `Shared.tsx` (reusable `ActionButton`, `TransactionRow`, `FeeRow` components), `WalletStyles.ts` (centralized styling), and a barrel `index.ts` for clean imports.
+- **Portal Verification Splitting:** The `PortalVerificationScreen.tsx` (432 lines) was split into focused modules: the ~100-line JavaScript DOM scraping logic was extracted to `components/PortalScraperScript.ts`, and the profile result card UI was extracted to `components/PortalResultCard.tsx`. The screen file now imports and composes these pieces cleanly.
+- **React Performance Optimization:** Applied `useMemo` and `useCallback` hooks across `StudentWalletScreen.tsx` and `StudentHomeScreen.tsx` to prevent unnecessary re-renders. Transaction list rendering is now memoized, and all event handlers use stable references via `useCallback` with proper dependency arrays.
+- **API Error Resilience:** Added a visible error banner component to the Wallet screen that surfaces backend/network errors (e.g. Render cold-start timeouts) instead of failing silently. The banner is dismissible via a close button and auto-clears on successful retry.
+
+### 4.3 Error Resolutions & Fixes
+- **Map Tile Provider Migration (Critical Fix):** The initial OpenStreetMap and Humanitarian OSM (HOT) tile servers were unreliable — tiles disappeared on zoom, loaded slowly due to rate-limiting, and lacked sufficient detail for Nigerian campus roads. Migrated to **CartoDB Voyager** tiles served via a global CDN (CARTO) with support for zoom levels 0–20, eliminating tile disappearance. No API key or billing is required.
+- **User Location Accuracy (Desktop Browser Limitation):** Nigerian ISPs often route internet traffic through Port Harcourt or Lagos, causing desktop browser IP-based geolocation to report incorrect cities. Fixed by: (1) always defaulting the map center to DOU Campus (Asaba, lat 6.25, lng 6.70), (2) adding a dedicated 🏫 "Campus" recenter button alongside the 📍 GPS button, and (3) rendering a pulsing blue dot at the browser-reported position with an accuracy circle so students understand the margin of error. True GPS accuracy is only available on mobile devices via `expo-location`.
+- **Map User Location Icon:** Replaced the plain blue circle with a Google Maps-style pulsing blue dot (CSS animation) with a white border and accuracy ring for clear visibility.
+- **Location Permissions Fix:** Ensured that `expo-location` prompts the user for permissions gracefully and handles denial states using fallback UI components.
+- **Metro Bundler Configurations:** Fixed React Native Web `metro.config.js` to ensure the project boots correctly on the web interface.
+
+---
+
+## CHAPTER FIVE: SUMMARY, CONCLUSION, AND RECOMMENDATIONS
+
+### 5.1 Summary of Findings
+The DOU Transit app successfully digitizes Keke operations, ensuring that the campus transport ecosystem is cashless, secure, and easily monitored by the administration.
+
+### 5.2 Conclusion
+By migrating to React Native and solidifying the Kotlin backend, the project achieves a scalable architecture capable of handling thousands of concurrent student requests during peak hours.
+
+### 5.3 Recommendations
+- Student Affairs should strictly enforce the physical QR code stickers on all campus Kekes.
+- Future work should include offline Bluetooth Low Energy (BLE) payments for areas with poor internet connectivity on campus.
+
+---
+*(End of Project Documentation. Continually updated as the system evolves.)*

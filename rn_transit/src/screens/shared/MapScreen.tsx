@@ -1,17 +1,18 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   TouchableOpacity,
   SafeAreaView,
   StyleSheet,
-  Dimensions,
 } from 'react-native';
-import MapView, { Marker, Polyline, PROVIDER_DEFAULT, Region } from 'react-native-maps';
+import MapView from '../../components/map/MapView';
+import type { MapRegion, MarkerData } from '../../components/map/types';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { Colors, Spacing, FontSize, BorderRadius, Shadows } from '../../config/theme';
+import { Colors, Spacing, FontSize, BorderRadius } from '../../config/theme';
 import { API } from '../../config/api';
+import { useLandmarkStore } from '../../stores/landmarkStore';
 
 interface MapPoint {
   latitude: number;
@@ -30,30 +31,72 @@ interface MapScreenProps {
   interactive?: boolean;
 }
 
+const TYPE_COLORS: Record<string, string> = {
+  pickup: Colors.info,
+  destination: Colors.error,
+  driver: Colors.success,
+  landmark: Colors.black,
+};
+
+const LANDMARK_TYPE_COLORS: Record<string, string> = {
+  destination: Colors.error,
+  pickup_zone: Colors.info,
+  vendor: Colors.warning,
+  medical_center: Colors.error,
+  park: Colors.success,
+  gate: Colors.grey,
+};
+
 export default function MapScreen({
   initialCenter,
-  initialZoom,
   markers: externalMarkers,
   routePoints: externalRoutePoints,
   destinationName,
-  showRoute: initialShowRoute = false,
   interactive = true,
 }: MapScreenProps) {
   const navigation = useNavigation<NativeStackNavigationProp<any>>();
-  const [routePoints] = useState<{ latitude: number; longitude: number }[]>(externalRoutePoints ?? []);
+  const [routePoints] = useState(externalRoutePoints ?? []);
   const [distanceKm] = useState(() => {
     if (!routePoints || routePoints.length < 2) return 0;
-    // Rough estimate from polyline points
     let d = 0;
     for (let i = 1; i < routePoints.length; i++) {
       d += haversine(routePoints[i - 1], routePoints[i]);
     }
     return d;
   });
-  const [durationMin] = useState(() => Math.round((distanceKm / 30) * 60)); // ~30 km/h campus speed
+  const [durationMin] = useState(() => Math.round((distanceKm / 30) * 60));
 
-  const markers = externalMarkers ?? [];
-  const region: Region = {
+  // Fetch campus landmarks from the backend
+  const { landmarks, fetchLandmarks } = useLandmarkStore();
+  useEffect(() => {
+    fetchLandmarks();
+  }, []);
+
+  // Merge external markers with backend landmarks
+  const mapMarkers: MarkerData[] = [
+    // Explicitly passed markers (pickup, destination, driver)
+    ...(externalMarkers ?? []).map(
+      (m): MarkerData => ({
+        latitude: m.latitude,
+        longitude: m.longitude,
+        title: m.label ?? '',
+        pinColor: TYPE_COLORS[m.type ?? 'landmark'] ?? Colors.black,
+      }),
+    ),
+    // Campus landmarks from the database
+    ...landmarks.map(
+      (lm): MarkerData => ({
+        id: lm.id,
+        latitude: lm.latitude,
+        longitude: lm.longitude,
+        title: lm.displayName,
+        description: `📍 ${lm.landmarkType.replace(/_/g, ' ')}`,
+        pinColor: LANDMARK_TYPE_COLORS[lm.landmarkType] || Colors.black,
+      }),
+    ),
+  ];
+
+  const region: MapRegion = {
     latitude: initialCenter?.latitude ?? API.campusCenterLat,
     longitude: initialCenter?.longitude ?? API.campusCenterLng,
     latitudeDelta: 0.02,
@@ -74,42 +117,14 @@ export default function MapScreen({
 
       <View style={styles.mapContainer}>
         <MapView
-          style={styles.map}
-          provider={PROVIDER_DEFAULT}
           initialRegion={region}
           showsUserLocation
           showsMyLocationButton
-          rotateEnabled={false}
-          minZoomLevel={12}
-          maxZoomLevel={19}
-        >
-          {/* Route polyline */}
-          {routePoints.length >= 2 && (
-            <Polyline
-              coordinates={routePoints}
-              strokeColor={Colors.black}
-              strokeWidth={4}
-              lineDashPattern={[0]}
-            />
-          )}
+          markers={mapMarkers}
+          routePoints={routePoints.length >= 2 ? routePoints : undefined}
+          interactive={interactive}
+        />
 
-          {/* Markers */}
-          {markers.map((m, i) => (
-            <Marker
-              key={i}
-              coordinate={{ latitude: m.latitude, longitude: m.longitude }}
-              title={m.label ?? ''}
-              pinColor={
-                m.type === 'pickup' ? Colors.info :
-                m.type === 'destination' ? Colors.error :
-                m.type === 'driver' ? Colors.success :
-                Colors.black
-              }
-            />
-          ))}
-        </MapView>
-
-        {/* Route info overlay */}
         {routePoints.length >= 2 && (
           <View style={styles.routeInfo}>
             <Text style={styles.routeInfoText}>
@@ -125,7 +140,6 @@ export default function MapScreen({
   );
 }
 
-/** Haversine distance in km between two lat/lng points */
 function haversine(
   a: { latitude: number; longitude: number },
   b: { latitude: number; longitude: number },
@@ -155,7 +169,6 @@ const styles = StyleSheet.create({
   backBtn: { fontSize: FontSize.md, color: Colors.black, fontWeight: '600' },
   title: { fontSize: FontSize.xl, fontWeight: 'bold' },
   mapContainer: { flex: 1, position: 'relative' },
-  map: { flex: 1 },
   routeInfo: {
     position: 'absolute',
     top: 12,

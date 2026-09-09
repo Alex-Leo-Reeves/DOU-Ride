@@ -7,15 +7,26 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   ScrollView,
-  Image,
+  Platform,
+  TextInput,
 } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { WebView, WebViewNavigation } from 'react-native-webview';
 import { Colors, FontSize, BorderRadius, Shadows } from '../../config/theme';
 import { API } from '../../config/api';
 import { api } from '../../services/api';
 import { useAuthStore } from '../../stores/authStore';
+import { PortalResultCard } from './components/PortalResultCard';
+
+// Only import WebView on native platforms
+let WebView: any = null;
+let SCRAPER_JS: string = '';
+if (Platform.OS !== 'web') {
+  try {
+    WebView = require('react-native-webview').WebView;
+    SCRAPER_JS = require('./components/PortalScraperScript').SCRAPER_JS;
+  } catch (_) {}
+}
 
 export interface PortalScrapeResult {
   matricNumber: string;
@@ -45,137 +56,38 @@ export default function PortalVerificationScreen() {
     exists: boolean;
     email?: string;
   } | null>(null);
-  const webViewRef = useRef<WebView>(null);
+
+  // Web-only: manual entry state
+  const [webManualEntry, setWebManualEntry] = useState(false);
+  const [manualName, setManualName] = useState('');
+  const [manualMatric, setManualMatric] = useState('');
+  const [manualDept, setManualDept] = useState('');
+  const [manualFaculty, setManualFaculty] = useState('');
+  const [manualLevel, setManualLevel] = useState('');
+  const [manualEmail, setManualEmail] = useState('');
+
+  // Native-only refs
+  const webViewRef = useRef<any>(null);
   const scrapeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scrapeCount = useRef(0);
 
   const DOU_PORTAL_URL = API.douPortalUrl;
-
-  // Determine if opened from login screen (vs registration)
   const fromLogin = route.params?.fromLogin ?? false;
 
-  const SCRAPER_JS = `
-(function() {
-  try {
-    let name = ''; let matric = ''; let dept = '';
-    let faculty = ''; let level = ''; let email = '';
-    let profileImage = '';
-
-    // Find profile images
-    document.querySelectorAll('img').forEach(img => {
-      const s = (img.src||'').toLowerCase();
-      const a = (img.alt||'').toLowerCase();
-      if ((s.includes('profile')||s.includes('photo')||a.includes('profile')||a.includes('photo')||a.includes('student')) && !s.includes('logo'))
-        profileImage = img.src;
-    });
-
-    // If no profile image found, try to capture avatar/img in student profile area
-    if (!profileImage) {
-      document.querySelectorAll('.profile-area img, .student-card img, .avatar img').forEach(img => {
-        profileImage = img.src;
-      });
-    }
-
-    // Layout 1: Tables
-    document.querySelectorAll('table tr').forEach(tr => {
-      const cells = tr.querySelectorAll('td, th');
-      if (cells.length >= 2) {
-        const l = cells[0].innerText.trim().toLowerCase();
-        const v = cells[cells.length-1].innerText.trim();
-        if (l.includes('name')||l.includes('full name')||l.includes('student name')) name = v;
-        if (l.includes('matric')||l.includes('reg no')||l.includes('reg number')||l.includes('admission')) matric = v;
-        if (l.includes('department')||l.includes('dept')) dept = v;
-        if (l.includes('faculty')) faculty = v;
-        if (l.includes('level')||l.includes('year')) level = v;
-        if (l.includes('email')) email = v;
-      }
-    });
-
-    // Layout 2: DL/dt/dd
-    if (!name) document.querySelectorAll('dt, .label, .field-label').forEach(el => {
-      const l = el.innerText.trim().toLowerCase();
-      const v = (el.nextElementSibling?.innerText||el.querySelector('dd, .value')?.innerText||'').trim();
-      if (l.includes('name')||l.includes('student name')) name = v;
-      if (l.includes('matric')||l.includes('reg')) matric = v;
-      if (l.includes('department')||l.includes('dept')) dept = v;
-      if (l.includes('faculty')) faculty = v;
-      if (l.includes('level')||l.includes('year')) level = v;
-      if (l.includes('email')) email = v;
-    });
-
-    // Layout 3: Key: value divs
-    if (!name) document.querySelectorAll('.info-row, .detail-row, .field-row, .profile-row').forEach(row => {
-      const l = (row.querySelector('.label, .field-label, dt')?.innerText||'').trim().toLowerCase();
-      const v = (row.querySelector('.value, .field-value, dd')?.innerText||'').trim();
-      if (l.includes('name')) name = v;
-      if (l.includes('matric')||l.includes('reg')) matric = v;
-      if (l.includes('department')||l.includes('dept')) dept = v;
-      if (l.includes('faculty')) faculty = v;
-      if (l.includes('level')||l.includes('year')) level = v;
-      if (l.includes('email')) email = v;
-    });
-
-    // Layout 4: Input values
-    if (!name) document.querySelectorAll('input[name], input[id]').forEach(inp => {
-      const id = (inp.id||'').toLowerCase();
-      const n = (inp.name||'').toLowerCase();
-      const v = inp.value.trim();
-      if (id.includes('name')||n.includes('name')) name = v;
-      if (id.includes('matric')||n.includes('matric')||id.includes('regno')) matric = v;
-      if (id.includes('department')||n.includes('department')) dept = v;
-      if (id.includes('faculty')||n.includes('faculty')) faculty = v;
-      if (id.includes('level')||n.includes('level')) level = v;
-      if (id.includes('email')||n.includes('email')) email = v;
-    });
-
-    // Layout 5: Card/panel text with colons
-    if (!name) document.querySelectorAll('.card, .panel, .box, .student-card, .profile-panel').forEach(card => {
-      card.innerText.split('\\n').forEach(line => {
-        const p = line.split(':');
-        if (p.length===2) {
-          const l = p[0].trim().toLowerCase();
-          const v = p[1].trim();
-          if (l.includes('name')) name = v;
-          if (l.includes('matric')||l.includes('reg')) matric = v;
-          if (l.includes('department')||l.includes('dept')) dept = v;
-          if (l.includes('faculty')) faculty = v;
-          if (l.includes('level')||l.includes('year')) level = v;
-          if (l.includes('email')) email = v;
-        }
-      });
-    });
-
-    // Layout 6: Heading
-    if (!name) {
-      const h = document.querySelector('h1, h2, .page-title, .student-name');
-      if (h) name = h.innerText.trim();
-    }
-
-    window.ReactNativeWebView.postMessage(JSON.stringify({
-      name, matric, department: dept, faculty, level, email, profileImage,
-      pageTitle: document.title
-    }));
-  } catch(e) {
-    window.ReactNativeWebView.postMessage(JSON.stringify({error: e.message}));
-  }
-})();
-`;
-
+  // === Native-only handlers ===
   const injectScraper = useCallback(() => {
-    if (!webViewRef.current || result) return;
+    if (Platform.OS === 'web' || !webViewRef.current || result) return;
     scrapeCount.current += 1;
     if (scrapeCount.current > 15) return;
     webViewRef.current.injectJavaScript(SCRAPER_JS);
-  }, [result, SCRAPER_JS]);
+  }, [result]);
 
   const handleMessage = useCallback((event: any) => {
     try {
       const data = JSON.parse(event.nativeEvent.data);
       if (data.error) return;
-
       const studentName = data.name || '';
       const matricNo = data.matric || '';
-
       if (studentName && matricNo) {
         setResult({
           matricNumber: matricNo,
@@ -191,9 +103,8 @@ export default function PortalVerificationScreen() {
   }, []);
 
   const handleNavigationStateChange = useCallback(
-    (navState: WebViewNavigation) => {
+    (navState: any) => {
       if (navState.loading) return;
-      // After page loaded, inject scraper with a delay
       if (navState.url && navState.url.startsWith('https://') && !navState.url.includes('login') && !result) {
         if (scrapeTimerRef.current) clearTimeout(scrapeTimerRef.current);
         scrapeTimerRef.current = setTimeout(injectScraper, 2000);
@@ -202,7 +113,7 @@ export default function PortalVerificationScreen() {
     [injectScraper, result],
   );
 
-  /** Check if the scraped student already has an account */
+  // === Shared handlers ===
   const checkExistingAccount = useCallback(async (matric: string) => {
     try {
       const res = await api.post('/api/auth/portal-check', { matricNumber: matric });
@@ -212,7 +123,6 @@ export default function PortalVerificationScreen() {
         setExistingUser({ exists: false });
       }
     } catch {
-      // If backend unreachable, default to no existing account
       setExistingUser({ exists: false });
     }
   }, []);
@@ -223,23 +133,16 @@ export default function PortalVerificationScreen() {
     }
   }, [result, checkExistingAccount]);
 
-  /** Called when user presses "Create Account" after portal verification */
   const goToRegistration = () => {
     if (!result) return;
     navigation.navigate('StudentRegister', { portalData: result });
   };
 
-  /** Called when user presses "Log In" (existing account found) */
   const handleLogin = async () => {
     if (!result || !existingUser?.email) return;
     setLoginLoading(true);
     setLoginError('');
-
-    // Try to log in — the password will be asked in the login screen
-    // Navigate to login with pre-filled email
-    navigation.navigate('Login', {
-      prefilledEmail: existingUser.email,
-    });
+    navigation.navigate('Login', { prefilledEmail: existingUser.email });
     setLoginLoading(false);
   };
 
@@ -248,17 +151,42 @@ export default function PortalVerificationScreen() {
     setExistingUser(null);
     setLoginError('');
     scrapeCount.current = 0;
-    setTimeout(injectScraper, 1000);
+    if (Platform.OS !== 'web') {
+      setTimeout(injectScraper, 1000);
+    }
   };
 
+  // === Web: open portal in new tab, then show manual entry form ===
+  const handleWebPortalOpen = () => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      window.open(DOU_PORTAL_URL, '_blank');
+    }
+    setWebManualEntry(true);
+    setShowWebView(true);
+  };
+
+  const handleWebManualSubmit = () => {
+    if (!manualName.trim() || !manualMatric.trim()) return;
+    setResult({
+      matricNumber: manualMatric.trim(),
+      fullName: manualName.trim(),
+      department: manualDept.trim(),
+      faculty: manualFaculty.trim(),
+      level: manualLevel.trim(),
+      email: manualEmail.trim(),
+    });
+    setWebManualEntry(false);
+  };
+
+  // === Render ===
   return (
     <SafeAreaView style={styles.container}>
       {showWebView ? (
         <View style={{ flex: 1 }}>
-          {/* header */}
+          {/* Header */}
           <View style={styles.webViewHeader}>
             <TouchableOpacity
-              onPress={() => { setShowWebView(false); setResult(null); setExistingUser(null); }}
+              onPress={() => { setShowWebView(false); setResult(null); setExistingUser(null); setWebManualEntry(false); }}
             >
               <Text style={styles.webViewBack}>← Close</Text>
             </TouchableOpacity>
@@ -270,88 +198,75 @@ export default function PortalVerificationScreen() {
             ) : null}
           </View>
 
-          {/* result preview + action */}
+          {/* Result preview */}
           {result && (
             <ScrollView style={styles.resultContainer}>
-              <View style={styles.resultCard}>
-                <Text style={styles.resultTitle}>✅ Profile Found</Text>
-                {result.profileImageBase64 ? (
-                  <Image
-                    source={{ uri: result.profileImageBase64 }}
-                    style={styles.profilePic}
-                    resizeMode="cover"
-                  />
-                ) : null}
-                <Field label="Name" value={result.fullName} />
-                <Field label="Matric" value={result.matricNumber} />
-                <Field label="Department" value={result.department} />
-                <Field label="Faculty" value={result.faculty} />
-                <Field label="Level" value={result.level || 'N/A'} />
-                {result.email ? <Field label="Email" value={result.email} /> : null}
-
-                <View style={styles.actionsContainer}>
-                  {/* User already has an account → Login */}
-                  {existingUser?.exists ? (
-                    <>
-                      <Text style={styles.existingText}>
-                        You already have an account ({existingUser.email}). Log in to continue.
-                      </Text>
-                      <TouchableOpacity
-                        style={[styles.actionBtn, styles.loginBtn]}
-                        onPress={handleLogin}
-                        disabled={loginLoading}
-                      >
-                        {loginLoading ? (
-                          <ActivityIndicator color={Colors.white} />
-                        ) : (
-                          <Text style={styles.actionBtnText}>Log In</Text>
-                        )}
-                      </TouchableOpacity>
-                      {loginError ? <Text style={styles.errorText}>{loginError}</Text> : null}
-                    </>
-                  ) : existingUser === null ? (
-                    <ActivityIndicator color={Colors.black} style={{ margin: 12 }} />
-                  ) : (
-                    <>
-                      <Text style={styles.newUserText}>
-                        No existing account found. Create one with these details.
-                      </Text>
-                      <TouchableOpacity
-                        style={[styles.actionBtn, styles.createBtn]}
-                        onPress={goToRegistration}
-                      >
-                        <Text style={styles.actionBtnText}>Create Account</Text>
-                      </TouchableOpacity>
-                    </>
-                  )}
-
-                  <TouchableOpacity
-                    style={[styles.actionBtn, styles.cancelBtn]}
-                    onPress={() => { setShowWebView(false); setResult(null); setExistingUser(null); }}
-                  >
-                    <Text style={[styles.actionBtnText, styles.cancelBtnText]}>Cancel</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
+              <PortalResultCard
+                result={result}
+                existingUser={existingUser}
+                loginLoading={loginLoading}
+                loginError={loginError}
+                onLogin={handleLogin}
+                onRegister={goToRegistration}
+                onCancel={() => { setShowWebView(false); setResult(null); setExistingUser(null); }}
+              />
             </ScrollView>
           )}
 
-          {/* WebView */}
-          <View style={{ flex: result ? 0 : 1, height: result ? 200 : undefined }}>
-            <WebView
-              ref={webViewRef}
-              source={{ uri: DOU_PORTAL_URL }}
-              style={{ flex: 1 }}
-              javaScriptEnabled={true}
-              domStorageEnabled={true}
-              onLoadStart={() => setIsLoading(true)}
-              onLoadEnd={() => setIsLoading(false)}
-              onNavigationStateChange={handleNavigationStateChange}
-              onMessage={handleMessage}
-            />
-          </View>
+          {/* Platform-specific content */}
+          {Platform.OS === 'web' ? (
+            // WEB: Manual entry form (portal opened in new tab)
+            !result && webManualEntry ? (
+              <ScrollView style={styles.webFormContainer} contentContainerStyle={styles.webFormContent}>
+                <Text style={styles.webFormTitle}>📋 Enter Your Portal Details</Text>
+                <Text style={styles.webFormSubtitle}>
+                  The DOU Portal has been opened in a new tab. Log in there, then copy your details below.
+                </Text>
 
-          {!result && (
+                <TextInput style={styles.webInput} placeholder="Full Name *" value={manualName} onChangeText={setManualName} placeholderTextColor={Colors.grey} />
+                <TextInput style={styles.webInput} placeholder="Matric Number *" value={manualMatric} onChangeText={setManualMatric} placeholderTextColor={Colors.grey} />
+                <TextInput style={styles.webInput} placeholder="Department" value={manualDept} onChangeText={setManualDept} placeholderTextColor={Colors.grey} />
+                <TextInput style={styles.webInput} placeholder="Faculty" value={manualFaculty} onChangeText={setManualFaculty} placeholderTextColor={Colors.grey} />
+                <TextInput style={styles.webInput} placeholder="Level (e.g. 400)" value={manualLevel} onChangeText={setManualLevel} placeholderTextColor={Colors.grey} />
+                <TextInput style={styles.webInput} placeholder="Email" value={manualEmail} onChangeText={setManualEmail} keyboardType="email-address" placeholderTextColor={Colors.grey} />
+
+                <TouchableOpacity
+                  style={[styles.webSubmitBtn, (!manualName.trim() || !manualMatric.trim()) && styles.webSubmitBtnDisabled]}
+                  onPress={handleWebManualSubmit}
+                  disabled={!manualName.trim() || !manualMatric.trim()}
+                >
+                  <Text style={styles.webSubmitBtnText}>Verify Details</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity onPress={() => { if (typeof window !== 'undefined') window.open(DOU_PORTAL_URL, '_blank'); }} style={{ marginTop: 12 }}>
+                  <Text style={styles.reopenLink}>🔗 Re-open DOU Portal</Text>
+                </TouchableOpacity>
+              </ScrollView>
+            ) : null
+          ) : (
+            // NATIVE: WebView with auto-scraping
+            WebView ? (
+              <View style={{ flex: result ? 0 : 1, height: result ? 200 : undefined }}>
+                <WebView
+                  ref={webViewRef}
+                  source={{ uri: DOU_PORTAL_URL }}
+                  style={{ flex: 1 }}
+                  javaScriptEnabled={true}
+                  domStorageEnabled={true}
+                  onLoadStart={() => setIsLoading(true)}
+                  onLoadEnd={() => setIsLoading(false)}
+                  onNavigationStateChange={handleNavigationStateChange}
+                  onMessage={handleMessage}
+                />
+              </View>
+            ) : (
+              <View style={styles.unsupportedContainer}>
+                <Text style={styles.unsupportedText}>WebView not available on this platform.</Text>
+              </View>
+            )
+          )}
+
+          {!result && Platform.OS !== 'web' && (
             <View style={styles.webViewFooter}>
               <Text style={styles.footerText}>
                 Log into the portal. Your profile will be auto-detected.
@@ -366,13 +281,17 @@ export default function PortalVerificationScreen() {
           <Text style={styles.subtitle}>
             {fromLogin
               ? 'Log into the DOU Portal to auto-fill your details and sign in.'
-              : 'Open the DOU Student Portal to verify your details automatically.'}
+              : Platform.OS === 'web'
+                ? 'The DOU Portal will open in a new tab. Copy your details back here to verify.'
+                : 'Open the DOU Student Portal to verify your details automatically.'}
           </Text>
           <TouchableOpacity
             style={styles.openButton}
-            onPress={() => { setShowWebView(true); scrapeCount.current = 0; }}
+            onPress={Platform.OS === 'web' ? handleWebPortalOpen : () => { setShowWebView(true); scrapeCount.current = 0; }}
           >
-            <Text style={styles.openButtonText}>Open Portal</Text>
+            <Text style={styles.openButtonText}>
+              {Platform.OS === 'web' ? 'Open Portal & Enter Details' : 'Open Portal'}
+            </Text>
           </TouchableOpacity>
           <TouchableOpacity onPress={() => navigation.goBack()} style={{ marginTop: 16 }}>
             <Text style={styles.skipText}>
@@ -382,15 +301,6 @@ export default function PortalVerificationScreen() {
         </View>
       )}
     </SafeAreaView>
-  );
-}
-
-function Field({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={styles.fieldRow}>
-      <Text style={styles.fieldLabel}>{label}</Text>
-      <Text style={styles.fieldValue}>{value}</Text>
-    </View>
   );
 }
 
@@ -410,22 +320,24 @@ const styles = StyleSheet.create({
   webViewBack: { fontSize: FontSize.md, color: Colors.black, fontWeight: '600' },
   retryBtn: { fontSize: FontSize.md, color: Colors.black, fontWeight: '600' },
   resultContainer: { maxHeight: 320, backgroundColor: '#f0f8f0' },
-  resultCard: { margin: 8, padding: 16, backgroundColor: '#e8f5e9', borderRadius: BorderRadius.md, borderWidth: 2, borderColor: Colors.success },
-  resultTitle: { fontSize: FontSize.lg, fontWeight: 'bold', color: Colors.black, marginBottom: 8 },
-  profilePic: { width: 64, height: 64, borderRadius: 32, alignSelf: 'center', marginBottom: 8, borderWidth: 2, borderColor: Colors.black },
-  fieldRow: { flexDirection: 'row', paddingVertical: 2 },
-  fieldLabel: { width: 90, fontSize: FontSize.sm, color: Colors.grey },
-  fieldValue: { flex: 1, fontSize: FontSize.sm, fontWeight: '500', color: Colors.black },
-  actionsContainer: { marginTop: 16, gap: 8 },
-  existingText: { fontSize: FontSize.sm, color: Colors.info, textAlign: 'center', marginBottom: 8 },
-  newUserText: { fontSize: FontSize.sm, color: Colors.grey, textAlign: 'center', marginBottom: 8 },
-  actionBtn: { paddingVertical: 12, borderRadius: BorderRadius.md, alignItems: 'center' },
-  loginBtn: { backgroundColor: Colors.black },
-  createBtn: { backgroundColor: Colors.success },
-  cancelBtn: { backgroundColor: Colors.white, borderWidth: 1.5, borderColor: Colors.grey },
-  actionBtnText: { color: Colors.white, fontSize: FontSize.md, fontWeight: 'bold' },
-  cancelBtnText: { color: Colors.grey },
-  errorText: { color: Colors.error, fontSize: FontSize.sm, textAlign: 'center' },
   webViewFooter: { padding: 12, backgroundColor: Colors.black },
   footerText: { color: Colors.white, fontSize: FontSize.sm, textAlign: 'center' },
+  // Web manual entry styles
+  webFormContainer: { flex: 1, backgroundColor: Colors.white },
+  webFormContent: { padding: 24 },
+  webFormTitle: { fontSize: 22, fontWeight: 'bold', color: Colors.black, marginBottom: 8 },
+  webFormSubtitle: { fontSize: FontSize.md, color: Colors.grey, marginBottom: 24, lineHeight: 22 },
+  webInput: {
+    borderWidth: 2, borderColor: Colors.black, borderRadius: BorderRadius.sm,
+    padding: 14, fontSize: FontSize.md, marginBottom: 12, color: Colors.black,
+    backgroundColor: Colors.white,
+  },
+  webSubmitBtn: { backgroundColor: Colors.black, padding: 16, borderRadius: BorderRadius.sm, alignItems: 'center', marginTop: 8 },
+  webSubmitBtnDisabled: { opacity: 0.4 },
+  webSubmitBtnText: { color: Colors.white, fontWeight: 'bold', fontSize: FontSize.lg },
+  reopenLink: { color: Colors.black, fontSize: FontSize.md, textAlign: 'center', textDecorationLine: 'underline', fontWeight: '600' },
+  unsupportedContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32 },
+  unsupportedText: { fontSize: FontSize.md, color: Colors.grey, textAlign: 'center' },
 });
+
+

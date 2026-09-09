@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, memo } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -21,10 +21,55 @@ const destinations = [
   { id: 'dest-8', name: 'Faculty of Agriculture', lat: 6.258, lng: 6.715 },
 ];
 
+const ActiveRideView = memo(() => {
+  const navigation = useNavigation<NativeStackNavigationProp<any>>();
+  const { tripStatus, driverName, driverFleetNumber, destinationName, boardingPin, reset } = useRideStore();
+  
+  const handlePayDriver = useCallback(() => navigation.navigate(Routes.studentPay), [navigation]);
+  const handleReset = useCallback(() => { reset(); navigation.goBack(); }, [reset, navigation]);
+
+  return (
+    <SafeAreaView style={[styles.container, { backgroundColor: tripStatus === 'accepted' || tripStatus === 'requested' ? Colors.black : Colors.white }]}>
+      <View style={styles.activeContent}>
+        {tripStatus === 'requested' && (
+          <>
+            <ActivityIndicator size="large" color={Colors.white} />
+            <Text style={[styles.activeTitle, { color: Colors.white }]}>Finding your ride...</Text>
+          </>
+        )}
+        {(tripStatus === 'accepted' || tripStatus === 'boarding') && (
+          <>
+            <Text style={[styles.activeTitle, { color: Colors.white }]}>🚗 Ride Ready!</Text>
+            <Text style={{ color: Colors.white, fontSize: 20 }}>{driverName ?? 'Driver'} — Fleet #{driverFleetNumber ?? '??'}</Text>
+            <Text style={{ color: Colors.grey }}>To: {destinationName}</Text>
+            <View style={styles.pinBox}><Text style={styles.pinText}>{boardingPin ?? '----'}</Text><Text style={{ color: Colors.grey }}>Show PIN to driver</Text></View>
+            <TouchableOpacity style={styles.boardBtn} onPress={handlePayDriver}><Text style={styles.boardBtnText}>Pay Driver</Text></TouchableOpacity>
+          </>
+        )}
+        {tripStatus === 'completed' && (
+          <>
+            <Text style={styles.activeTitle}>✅ Ride Complete!</Text>
+            <Text style={{ color: Colors.grey }}>Please pay the driver via their QR pay link.</Text>
+            <TouchableOpacity style={styles.goBtn} onPress={handlePayDriver}><Text style={styles.goBtnText}>Scan & Pay</Text></TouchableOpacity>
+            <TouchableOpacity onPress={handleReset}><Text style={{ color: Colors.grey, marginTop: 16 }}>Skip — Already Paid</Text></TouchableOpacity>
+          </>
+        )}
+        {tripStatus === 'no_show' && (
+          <>
+            <Text style={[styles.activeTitle, { color: Colors.error }]}>❌ No-Show Penalty</Text>
+            <Text style={{ color: Colors.grey }}>₦50 deducted from your wallet</Text>
+            <TouchableOpacity style={styles.goBtn} onPress={handleReset}><Text style={styles.goBtnText}>OK</Text></TouchableOpacity>
+          </>
+        )}
+      </View>
+    </SafeAreaView>
+  );
+});
+
 export default function StudentHomeScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<any>>();
   const user = useAuthStore((s) => s.user);
-  const { currentTripId, tripStatus, isLoading: rideLoading, requestRide, reset } = useRideStore();
+  const { currentTripId, tripStatus, isLoading: rideLoading, requestRide } = useRideStore();
   const { joinQueue } = useQueueStore();
   const { balance, fetchBalance } = useWalletStore();
 
@@ -33,9 +78,13 @@ export default function StudentHomeScreen() {
   const [seats, setSeats] = useState(1);
   const [tripType, setTripType] = useState<'standard' | 'drop'>('standard');
 
-  useEffect(() => { fetchBalance(user?.userId ?? '', user?.token); }, []);
+  useEffect(() => { 
+    if (user?.userId) {
+      fetchBalance(user.userId, user.token); 
+    }
+  }, [user?.userId, user?.token, fetchBalance]);
 
-  const handleRequestRide = async () => {
+  const handleRequestRide = useCallback(async () => {
     if (!selectedDest || !user) return;
     const result = await requestRide({ destinationId: selectedDest, seats, tripType, destinationName: selectedDestName ?? undefined }, user.userId, user.token);
     if (result) {
@@ -46,7 +95,12 @@ export default function StudentHomeScreen() {
         navigation.navigate(Routes.studentQueueCalled);
       }
     }
-  };
+  }, [selectedDest, user, seats, tripType, selectedDestName, requestRide, joinQueue, navigation]);
+
+  const handleDestSelect = useCallback((id: string, name: string) => {
+    setSelectedDest(id);
+    setSelectedDestName(name);
+  }, []);
 
   if (currentTripId && tripStatus !== 'idle' && tripStatus !== 'completed') {
     return <ActiveRideView />;
@@ -71,7 +125,11 @@ export default function StudentHomeScreen() {
         <Text style={styles.sectionTitle}>Where to?</Text>
         <View style={styles.destGrid}>
           {destinations.map((d) => (
-            <TouchableOpacity key={d.id} style={[styles.destCard, selectedDest === d.id && styles.destCardActive]} onPress={() => { setSelectedDest(d.id); setSelectedDestName(d.name); }}>
+            <TouchableOpacity 
+              key={d.id} 
+              style={[styles.destCard, selectedDest === d.id && styles.destCardActive]} 
+              onPress={() => handleDestSelect(d.id, d.name)}
+            >
               <Text style={styles.destIcon}>📍</Text>
               <Text style={[styles.destName, selectedDest === d.id && { color: Colors.white }]} numberOfLines={2}>{d.name}</Text>
             </TouchableOpacity>
@@ -90,47 +148,6 @@ export default function StudentHomeScreen() {
           </TouchableOpacity>
         </View>
       </ScrollView>
-    </SafeAreaView>
-  );
-}
-
-function ActiveRideView() {
-  const navigation = useNavigation<NativeStackNavigationProp<any>>();
-  const { tripStatus, driverName, driverFleetNumber, destinationName, boardingPin, reset } = useRideStore();
-  return (
-    <SafeAreaView style={[styles.container, { backgroundColor: tripStatus === 'accepted' || tripStatus === 'requested' ? Colors.black : Colors.white }]}>
-      <View style={styles.activeContent}>
-        {tripStatus === 'requested' && (
-          <>
-            <ActivityIndicator size="large" color={Colors.white} />
-            <Text style={[styles.activeTitle, { color: Colors.white }]}>Finding your ride...</Text>
-          </>
-        )}
-        {(tripStatus === 'accepted' || tripStatus === 'boarding') && (
-          <>
-            <Text style={[styles.activeTitle, { color: Colors.white }]}>🚗 Ride Ready!</Text>
-            <Text style={{ color: Colors.white, fontSize: 20 }}>{driverName ?? 'Driver'} — Fleet #{driverFleetNumber ?? '??'}</Text>
-            <Text style={{ color: Colors.grey }}>To: {destinationName}</Text>
-            <View style={styles.pinBox}><Text style={styles.pinText}>{boardingPin ?? '----'}</Text><Text style={{ color: Colors.grey }}>Show PIN to driver</Text></View>
-            <TouchableOpacity style={styles.boardBtn} onPress={() => navigation.navigate(Routes.studentPay)}><Text style={styles.boardBtnText}>Pay Driver</Text></TouchableOpacity>
-          </>
-        )}
-        {tripStatus === 'completed' && (
-          <>
-            <Text style={styles.activeTitle}>✅ Ride Complete!</Text>
-            <Text style={{ color: Colors.grey }}>Please pay the driver via their QR pay link.</Text>
-            <TouchableOpacity style={styles.goBtn} onPress={() => navigation.navigate(Routes.studentPay)}><Text style={styles.goBtnText}>Scan & Pay</Text></TouchableOpacity>
-            <TouchableOpacity onPress={() => { reset(); navigation.goBack(); }}><Text style={{ color: Colors.grey, marginTop: 16 }}>Skip — Already Paid</Text></TouchableOpacity>
-          </>
-        )}
-        {tripStatus === 'no_show' && (
-          <>
-            <Text style={[styles.activeTitle, { color: Colors.error }]}>❌ No-Show Penalty</Text>
-            <Text style={{ color: Colors.grey }}>₦50 deducted from your wallet</Text>
-            <TouchableOpacity style={styles.goBtn} onPress={() => { reset(); navigation.goBack(); }}><Text style={styles.goBtnText}>OK</Text></TouchableOpacity>
-          </>
-        )}
-      </View>
     </SafeAreaView>
   );
 }

@@ -26,14 +26,24 @@ async function request(
     };
     if (token) headers['Authorization'] = `Bearer ${token}`;
 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
+
     const options: RequestInit = {
       method,
       headers,
       body: body ? JSON.stringify(body) : undefined,
+      signal: controller.signal,
     };
 
     const url = `${API.baseUrl}${endpoint}`;
-    const response = await fetch(url, options);
+    let response: Response;
+    try {
+      response = await fetch(url, options);
+    } finally {
+      clearTimeout(timeoutId);
+    }
+    
     const text = await response.text();
     const decoded = text ? JSON.parse(text) : {};
 
@@ -51,10 +61,12 @@ async function request(
   } catch (e: any) {
     // Differentiate between no internet and backend unreachable
     const msg = e.message || '';
-    if (msg.includes('Network request failed') || msg.includes('fetch')) {
+    if (msg.includes('Network request failed') || msg.includes('fetch') || e.name === 'AbortError') {
       return {
-        error: 'Cannot reach server',
-        details: `Backend at ${API.baseUrl} is not responding. Check your connection or try again later.`,
+        error: e.name === 'AbortError' ? 'Request timed out' : 'Cannot reach server',
+        details: e.name === 'AbortError' 
+          ? 'The server took too long to respond. It might be waking up.'
+          : `Backend at ${API.baseUrl} is not responding. Check your connection or try again later.`,
         _backendUnreachable: true,
       };
     }

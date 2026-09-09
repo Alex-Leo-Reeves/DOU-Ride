@@ -40,7 +40,7 @@ export const API = {
   osrmUrl: 'https://dockerfile-dwb2.onrender.com',
 
   /** DOU Portal URL for student verification */
-  douPortalUrl: 'https://dou.edu.ng/portal',
+  douPortalUrl: 'https://myportal.dou.edu.ng/',
 
   campusCenterLat: 6.25,
   campusCenterLng: 6.70,
