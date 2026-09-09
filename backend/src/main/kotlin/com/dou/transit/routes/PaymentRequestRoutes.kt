@@ -59,7 +59,7 @@ fun Route.paymentRequestRoutes() {
         // ============================================================
         get("/incoming/{userId}") {
             val userId = call.parameters["userId"]
-                ?: return@post call.respond(HttpStatusCode.BadRequest, ErrorResponse("Missing userId"))
+                ?: return@get call.respond(HttpStatusCode.BadRequest, ErrorResponse("Missing userId"))
 
             try {
                 DatabaseService.getConnection().use { conn ->
@@ -102,7 +102,7 @@ fun Route.paymentRequestRoutes() {
         // ============================================================
         get("/outgoing/{userId}") {
             val userId = call.parameters["userId"]
-                ?: return@post call.respond(HttpStatusCode.BadRequest, ErrorResponse("Missing userId"))
+                ?: return@get call.respond(HttpStatusCode.BadRequest, ErrorResponse("Missing userId"))
 
             try {
                 DatabaseService.getConnection().use { conn ->
