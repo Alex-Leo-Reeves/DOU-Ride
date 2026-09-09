@@ -12,54 +12,62 @@ import java.time.Instant
  * Connects to Supabase PostgreSQL via connection pooler.
  */
 object DatabaseService {
-    private val dataSource: HikariDataSource
+    private var dataSource: HikariDataSource? = null
+    private var initError: String? = null
 
     init {
-        val config = HikariConfig().apply {
-            val url = AppConfig.supabaseDbUrl
-            
-            // Render/Supabase provides postgres://user:pass@host:port/db
-            // JDBC requires jdbc:postgresql://host:port/db with username/password passed separately
-            if (url.contains("@")) {
-                val cleanUrl = url.replaceFirst("jdbc:", "") // in case they added jdbc: manually
-                val uri = java.net.URI(cleanUrl)
+        try {
+            val config = HikariConfig().apply {
+                val url = AppConfig.supabaseDbUrl
                 
-                var queryPart = uri.query ?: ""
-                if (!queryPart.contains("sslmode=")) {
-                    queryPart += if (queryPart.isEmpty()) "sslmode=require" else "&sslmode=require"
-                }
-                
-                jdbcUrl = "jdbc:postgresql://${uri.host}:${uri.port}${uri.path}?$queryPart"
-                
-                uri.userInfo?.let { info ->
-                    if (info.contains(":")) {
-                        username = info.substringBefore(":")
-                        password = info.substringAfter(":")
-                    } else {
-                        username = info
+                if (url.contains("@")) {
+                    val cleanUrl = url.replaceFirst("jdbc:", "")
+                    val uri = java.net.URI(cleanUrl)
+                    
+                    var queryPart = uri.query ?: ""
+                    if (!queryPart.contains("sslmode=")) {
+                        queryPart += if (queryPart.isEmpty()) "sslmode=require" else "&sslmode=require"
+                    }
+                    
+                    jdbcUrl = "jdbc:postgresql://${uri.host}:${uri.port}${uri.path}?$queryPart"
+                    
+                    uri.userInfo?.let { info ->
+                        if (info.contains(":")) {
+                            username = info.substringBefore(":")
+                            password = info.substringAfter(":")
+                        } else {
+                            username = info
+                        }
+                    }
+                } else {
+                    jdbcUrl = if (url.contains("sslmode=")) url else {
+                        if (url.contains("?")) "$url&sslmode=require" else "$url?sslmode=require"
                     }
                 }
-            } else {
-                jdbcUrl = if (url.contains("sslmode=")) url else {
-                    if (url.contains("?")) "$url&sslmode=require" else "$url?sslmode=require"
-                }
+                
+                maximumPoolSize = 10
+                minimumIdle = 2
+                idleTimeout = 30000
+                connectionTimeout = 10000
+                maxLifetime = 600000
+                isAutoCommit = true
+                driverClassName = "org.postgresql.Driver"
             }
-            
-            maximumPoolSize = 10
-            minimumIdle = 2
-            idleTimeout = 30000
-            connectionTimeout = 10000
-            maxLifetime = 600000
-            isAutoCommit = true
-            driverClassName = "org.postgresql.Driver"
+            dataSource = HikariDataSource(config)
+            println("[DB] Connection pool initialized")
+        } catch (e: Exception) {
+            println("[DB] Failed to initialize connection pool: ${e.message}")
+            e.printStackTrace()
+            initError = e.message
         }
-        dataSource = HikariDataSource(config)
-        println("[DB] Connection pool initialized")
     }
 
-    fun getConnection(): Connection = dataSource.connection
+    fun getConnection(): Connection {
+        val ds = dataSource ?: throw IllegalStateException("Database failed to initialize: $initError")
+        return ds.connection
+    }
 
     fun close() {
-        dataSource.close()
+        dataSource?.close()
     }
 }
