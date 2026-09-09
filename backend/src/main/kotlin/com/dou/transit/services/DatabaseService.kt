@@ -16,7 +16,27 @@ object DatabaseService {
 
     init {
         val config = HikariConfig().apply {
-            jdbcUrl = AppConfig.supabaseDbUrl
+            val url = AppConfig.supabaseDbUrl
+            
+            // Render/Supabase provides postgres://user:pass@host:port/db
+            // JDBC requires jdbc:postgresql://host:port/db with username/password passed separately
+            if (url.contains("@")) {
+                val cleanUrl = url.replaceFirst("jdbc:", "") // in case they added jdbc: manually
+                val uri = java.net.URI(cleanUrl)
+                jdbcUrl = "jdbc:postgresql://${uri.host}:${uri.port}${uri.path}"
+                
+                uri.userInfo?.let { info ->
+                    if (info.contains(":")) {
+                        username = info.substringBefore(":")
+                        password = info.substringAfter(":")
+                    } else {
+                        username = info
+                    }
+                }
+            } else {
+                jdbcUrl = url
+            }
+            
             maximumPoolSize = 10
             minimumIdle = 2
             idleTimeout = 30000
