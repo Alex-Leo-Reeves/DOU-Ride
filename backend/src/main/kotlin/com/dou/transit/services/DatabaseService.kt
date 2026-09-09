@@ -23,7 +23,13 @@ object DatabaseService {
             if (url.contains("@")) {
                 val cleanUrl = url.replaceFirst("jdbc:", "") // in case they added jdbc: manually
                 val uri = java.net.URI(cleanUrl)
-                jdbcUrl = "jdbc:postgresql://${uri.host}:${uri.port}${uri.path}"
+                
+                var queryPart = uri.query ?: ""
+                if (!queryPart.contains("sslmode=")) {
+                    queryPart += if (queryPart.isEmpty()) "sslmode=require" else "&sslmode=require"
+                }
+                
+                jdbcUrl = "jdbc:postgresql://${uri.host}:${uri.port}${uri.path}?$queryPart"
                 
                 uri.userInfo?.let { info ->
                     if (info.contains(":")) {
@@ -34,7 +40,9 @@ object DatabaseService {
                     }
                 }
             } else {
-                jdbcUrl = url
+                jdbcUrl = if (url.contains("sslmode=")) url else {
+                    if (url.contains("?")) "$url&sslmode=require" else "$url?sslmode=require"
+                }
             }
             
             maximumPoolSize = 10
