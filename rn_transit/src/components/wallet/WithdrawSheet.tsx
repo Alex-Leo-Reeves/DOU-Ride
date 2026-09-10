@@ -123,6 +123,10 @@ export function WithdrawSheet({ visible, onClose, onSubmit, currentBalance }: Wi
   };
 
   const processWithdrawal = async () => {
+    if (!selectedBank) {
+      Alert.alert('Missing Bank', 'Please select a receiving destination bank or fintech wallet.');
+      return;
+    }
     setIsProcessing(true);
     try {
       const success = await onSubmit({
