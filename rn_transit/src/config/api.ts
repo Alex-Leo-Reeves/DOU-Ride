@@ -35,7 +35,8 @@ export const API = {
 
   supabaseUrl: 'https://uawbhgrxmvwrhncpophm.supabase.co',
   supabaseAnonKey:
-    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVhd2JoZ3J4bXZ3cmhuY3BvcGhtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM4OTU2NTYsImV4cCI6MjA5OTQ3MTY1Nn0.FVeao1ms3_N2aUhGSiiEIk7sYY8pZLWCWj5dDItYXcQ',
+    process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ||
+    'sb_publishable_yvinBjMZ5GjGWlCcNNIrXg_dcr3j9ko',
 
   osrmUrl: 'https://dockerfile-dwb2.onrender.com',
 

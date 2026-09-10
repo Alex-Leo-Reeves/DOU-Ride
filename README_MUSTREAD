@@ -246,6 +246,10 @@ To transition the system from a prototype to a high-end, production-ready campus
    - **Problem:** Drivers and students had no dedicated screen to configure payout bank accounts or OPay phone numbers after registration.
    - **Fix:** Developed `SettingsScreen.tsx`, featuring Nigerian bank and fintech selection (OPay, PalmPay, Moniepoint, Kuda, GTBank, Zenith), account number input, transit notification controls, direct Campus Security hotlines, and verified sign-out.
 
+7. **Resolution of Render Gradle Build Failure and CORS Preflight Unification:**
+   - **Root Cause:** The compilation log from Render revealed build failures during `./gradlew shadowJar`: unresolved reference to `DatabaseService` on line 71 of `Application.kt` and missing wildcard import `kotlinx.serialization.json.*` on line 489 of `RideRoutes.kt`. Because of this compilation failure, Render aborted the deployment and remained on an outdated image that lacked `X-User-Id` in its CORS preflight allow-headers, blocking browser `OPTIONS` requests with 403 Forbidden.
+   - **Resolution:** Added `import com.dou.transit.services.DatabaseService` in `Application.kt` and `import kotlinx.serialization.json.*` in `RideRoutes.kt`. Committed and pushed directly to `origin/main` (commit `12b098a`), allowing Render's multi-stage Docker build to compile the fat JAR and deploy the active CORS pipeline and Flutterwave payment flow.
+
 ---
 
 ## CHAPTER FIVE: SUMMARY, CONCLUSION, AND RECOMMENDATIONS

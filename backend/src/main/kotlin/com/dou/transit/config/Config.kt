@@ -10,12 +10,17 @@ object AppConfig {
 
     // Supabase
     val supabaseUrl: String = System.getenv("SUPABASE_URL") ?: "https://uawbhgrxmvwrhncpophm.supabase.co"
-    val supabaseServiceKey: String = System.getenv("SUPABASE_SERVICE_ROLE_KEY")
-        ?: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVhd2JoZ3J4bXZ3cmhuY3BvcGhtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4Mzg5NTY1NiwiZXhwIjoyMDk5NDcxNjU2fQ.Ehgn9JGlTHoCkCxHml5QzXBpLaW1_ZRZoHjS3liDFsY"
-    val supabaseJwksUrl: String = "$supabaseUrl/auth/v1/.well-known/jwks.json"
-    val supabaseDbPassword: String = System.getenv("SUPABASE_DB_PASSWORD") ?: "iammasteralexd1$"
-    val supabaseDbUrl: String = System.getenv("DATABASE_URL")
-        ?: "jdbc:postgresql://aws-0-eu-west-1.pooler.supabase.com:6543/postgres?user=postgres.uawbhgrxmvwrhncpophm&password=$supabaseDbPassword"
+    val supabasePublishableKey: String = System.getenv("SUPABASE_PUBLISHABLE_KEY")
+        ?: System.getenv("SUPABASE_ANON_KEY")
+        ?: ""
+    val supabaseServiceKey: String = System.getenv("SUPABASE_SECRET_KEY")
+        ?: System.getenv("SUPABASE_SERVICE_ROLE_KEY")
+        ?: ""
+    val supabaseJwksUrl: String = System.getenv("SUPABASE_JWKS_URL") ?: "$supabaseUrl/auth/v1/.well-known/jwks.json"
+    val supabaseDbPassword: String = System.getenv("SUPABASE_DB_PASSWORD") ?: ""
+    val supabaseDbUrl: String = (System.getenv("DATABASE_URL")
+        ?: "jdbc:postgresql://aws-0-eu-west-3.pooler.supabase.com:6543/postgres?user=postgres.uawbhgrxmvwrhncpophm&password=$supabaseDbPassword")
+        .replace("aws-0-eu-west-1.pooler.supabase.com", "aws-0-eu-west-3.pooler.supabase.com")
 
     // Flutterwave
     val flutterwaveSecretKey: String = System.getenv("FLUTTERWAVE_SECRET_KEY")
