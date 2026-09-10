@@ -424,7 +424,7 @@ fun Route.walletRoutes() {
 
                 val balStmt = conn.prepareStatement("""
                     SELECT COALESCE(SUM(
-                        CASE WHEN type IN ('deposit','refund','transfer_in','ride_payout') THEN amount
+                        CASE WHEN type IN ('deposit','refund','transfer_in','ride_payout') THEN amount - fee
                              WHEN type IN ('withdrawal','ride_payment','penalty','platform_fee','transfer_out') THEN -amount
                              ELSE 0 END
                     ), 0.00) AS balance
@@ -433,14 +433,26 @@ fun Route.walletRoutes() {
                 """.trimIndent())
                 balStmt.setString(1, userId)
                 val balRs = balStmt.executeQuery()
-                val balance = if (balRs.next()) balRs.getDouble("balance") else 0.0
+                val completedBalance = if (balRs.next()) balRs.getDouble("balance") else 0.0
 
-                if (balance < req.amount) {
-                    return@post call.respond(HttpStatusCode.BadRequest, ErrorResponse("Insufficient wallet balance for withdrawal"))
+                // Get total pending withdrawal amount
+                val pendingStmt = conn.prepareStatement("""
+                    SELECT COALESCE(SUM(amount), 0.00) AS pending
+                    FROM wallet_transactions
+                    WHERE user_id = ?::uuid AND type = 'withdrawal' AND status = 'pending'
+                """.trimIndent())
+                pendingStmt.setString(1, userId)
+                val pendingRs = pendingStmt.executeQuery()
+                val pendingAmount = if (pendingRs.next()) pendingRs.getDouble("pending") else 0.0
+
+                val availableBalance = completedBalance - pendingAmount
+
+                if (availableBalance < req.amount) {
+                    return@post call.respond(HttpStatusCode.BadRequest, ErrorResponse("Insufficient wallet balance. Available: ₦${availableBalance.toInt()}, Pending: ₦${pendingAmount.toInt()}"))
                 }
 
                 val reference = "DOU-WTH-${System.currentTimeMillis()}-${UUID.randomUUID().toString().take(8)}"
-                val newBalance = balance - req.amount
+                val newBalance = completedBalance - req.amount - pendingAmount
 
                 val txStmt = conn.prepareStatement("""
                     INSERT INTO wallet_transactions (user_id, type, amount, fee, balance_before, balance_after, status, reference, description, metadata)
@@ -448,7 +460,7 @@ fun Route.walletRoutes() {
                 """.trimIndent())
                 txStmt.setString(1, userId)
                 txStmt.setDouble(2, req.amount)
-                txStmt.setDouble(3, balance)
+                txStmt.setDouble(3, availableBalance)
                 txStmt.setDouble(4, newBalance)
                 txStmt.setString(5, reference)
                 txStmt.setString(6, "Withdrawal to ${req.bankName ?: "Bank"} (${req.accountNumber})")
