@@ -9,9 +9,8 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  ActivityIndicator,
 } from 'react-native';
-import { ArrowUpRight, Building2, Check, ChevronDown, CheckCircle2 } from 'lucide-react-native';
+import { ArrowUpRight, Building2, Check, ChevronDown } from 'lucide-react-native';
 import { Colors } from '../../config/theme';
 import { walletStyles as styles } from './WalletStyles';
 
@@ -42,20 +41,9 @@ export function WithdrawSheet({ visible, onClose, onSubmit, currentBalance }: Wi
   const [accountNumber, setAccountNumber] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [showBankPicker, setShowBankPicker] = useState(false);
-  const [verifyingAccount, setVerifyingAccount] = useState(false);
-  const [verifiedName, setVerifiedName] = useState<string | null>(null);
 
   useEffect(() => {
-    if (accountNumber.length === 10 && selectedBank) {
-      setVerifyingAccount(true);
-      const timer = setTimeout(() => {
-        setVerifyingAccount(false);
-        setVerifiedName('Verified Account Owner');
-      }, 600);
-      return () => clearTimeout(timer);
-    } else {
-      setVerifiedName(null);
-    }
+    // No fake verification
   }, [accountNumber, selectedBank]);
 
   const handleSubmit = async () => {
@@ -158,24 +146,6 @@ export function WithdrawSheet({ visible, onClose, onSubmit, currentBalance }: Wi
             keyboardType="number-pad"
             maxLength={10}
           />
-
-          {verifyingAccount && (
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2, marginBottom: 10 }}>
-              <ActivityIndicator size="small" color={Colors.primaryAccent} />
-              <Text style={{ fontSize: 12, color: Colors.slate500, marginLeft: 6 }}>
-                Verifying account with NIBSS...
-              </Text>
-            </View>
-          )}
-
-          {verifiedName && !verifyingAccount && (
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2, marginBottom: 12 }}>
-              <CheckCircle2 size={14} color={Colors.success} strokeWidth={2.5} />
-              <Text style={{ fontSize: 12, color: Colors.successDark, fontWeight: '700', marginLeft: 6 }}>
-                Account Verified: {verifiedName}
-              </Text>
-            </View>
-          )}
 
           <TouchableOpacity
             style={[styles.primaryBtn, (!amount || isProcessing) && styles.disabledBtn]}
