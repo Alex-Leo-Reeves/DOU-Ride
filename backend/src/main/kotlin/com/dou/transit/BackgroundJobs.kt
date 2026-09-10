@@ -22,7 +22,10 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 
 /**
- * Auto-clears pending withdrawals that have been stuck for more than 10 minutes
+ * Auto-clears pending withdrawals that have been stuck for more than 10 minutes.
+ * NOTE: only orphaned OLD pendings are failed here. The /withdraw endpoint
+ * refuses to create a new withdrawal while any pending exists, so the
+ * 10-minute window is the maximum a user ever waits — no double-spend.
  */
 fun autoClearStuckWithdrawals() {
     val conn = DatabaseService.getConnection()

@@ -454,6 +454,17 @@ fun Route.walletRoutes() {
                 val reference = "DOU-WTH-${System.currentTimeMillis()}-${UUID.randomUUID().toString().take(8)}"
                 val newBalance = completedBalance - req.amount - pendingAmount
 
+                if (AppConfig.flutterwaveSecretKey.isBlank() || AppConfig.flutterwaveSecretKey.contains("TEST", ignoreCase = true)) {
+                    println("[WITHDRAW] REFUSED $reference: FLUTTERWAVE_SECRET_KEY missing or test key (len=${AppConfig.flutterwaveSecretKey.length})")
+                    return@post call.respond(
+                        HttpStatusCode.ServiceUnavailable,
+                        ErrorResponse(
+                            "Withdrawals unavailable",
+                            "Payout provider is not configured with a LIVE secret key on the server. Set FLUTTERWAVE_SECRET_KEY (live, no TEST) in Render env and redeploy — no money was debited."
+                        )
+                    )
+                }
+
                 val txStmt = conn.prepareStatement("""
                     INSERT INTO wallet_transactions (user_id, type, amount, fee, balance_before, balance_after, status, reference, description, metadata)
                     VALUES (?::uuid, 'withdrawal', ?, 0.00, ?, ?, 'pending', ?, ?, ?::jsonb)
@@ -706,6 +717,14 @@ fun Route.walletRoutes() {
 
             if (accountNumber.length != 10 || bankCode.isBlank()) {
                 return@post call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid account number or bank code"))
+            }
+
+            if (AppConfig.flutterwaveSecretKey.isBlank() || AppConfig.flutterwaveSecretKey.contains("TEST", ignoreCase = true)) {
+                println("[VERIFY] REFUSED: no LIVE secret key configured (len=${AppConfig.flutterwaveSecretKey.length})")
+                return@post call.respond(
+                    HttpStatusCode.ServiceUnavailable,
+                    ErrorResponse("Verification unavailable", "Server payout key is not a LIVE key. Set FLUTTERWAVE_SECRET_KEY (live) in Render env and redeploy.")
+                )
             }
 
             // Normalize app-side NIP codes (000033 etc.) to Flutterwave bank codes.

@@ -30,9 +30,11 @@ object AppConfig {
         ?: "jdbc:postgresql://aws-0-eu-west-3.pooler.supabase.com:6543/postgres?user=postgres.uawbhgrxmvwrhncpophm&password=$supabaseDbPassword")
         .replace("aws-0-eu-west-1.pooler.supabase.com", "aws-0-eu-west-3.pooler.supabase.com")
 
-    // Flutterwave Credentials
-    val flutterwaveSecretKey: String = System.getenv("FLUTTERWAVE_SECRET_KEY")
-        ?: "FLWSECK-c42723ba8c0d1c134e82319136c22d57-19eacb66583vt-X"
+    // Flutterwave Credentials — NO hardcoded fallback for secret.
+    // Render MUST provide FLUTTERWAVE_SECRET_KEY (live key, no TEST in it).
+    // Empty here forces a clear "payout misconfigured" error instead of
+    // silently using an expired test key and leaving withdrawals stuck pending.
+    val flutterwaveSecretKey: String = System.getenv("FLUTTERWAVE_SECRET_KEY") ?: ""
 
     val flutterwavePublicKey: String = System.getenv("VITE_FLUTTERWAVE_PUBLIC_KEY")
         ?: "FLWPUBK-9acd4c40844063acf3e892f473da58b9-X"
