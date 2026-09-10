@@ -444,7 +444,7 @@ export default function StudentWalletScreen() {
                     <View style={styles.txInfo}>
                       <Text style={styles.txLabel}>{getTxLabel(tx.type)}</Text>
                       <Text style={styles.txMeta}>
-                        {tx.reference ? `Ref: ${tx.reference.substring(0, 10)}...` : 'Campus Settlement'}
+                        {tx.reference ? `Ref: ${tx.reference}` : 'Campus Settlement'}
                       </Text>
                     </View>
 
@@ -452,9 +452,9 @@ export default function StudentWalletScreen() {
                       <Text style={[styles.txAmountText, { color: isCredit ? Colors.successDark : Colors.slate900 }]}>
                         {isCredit ? '+' : '-'}₦{Math.abs(tx.amount).toLocaleString()}
                       </Text>
-                      <View style={[styles.statusBadge, { backgroundColor: tx.status === 'completed' ? Colors.successSoft : Colors.warningSoft }]}>
-                        <Text style={[styles.statusBadgeText, { color: tx.status === 'completed' ? Colors.successDark : Colors.warningDark }]}>
-                          {tx.status === 'completed' ? 'Cleared' : 'Pending'}
+                      <View style={[styles.statusBadge, { backgroundColor: tx.status === 'completed' ? Colors.successSoft : tx.status === 'failed' ? Colors.errorSoft : Colors.warningSoft }]}>
+                        <Text style={[styles.statusBadgeText, { color: tx.status === 'completed' ? Colors.successDark : tx.status === 'failed' ? Colors.errorDark : Colors.warningDark }]}>
+                          {tx.status === 'completed' ? 'Cleared' : tx.status === 'failed' ? 'Failed' : 'Pending'}
                         </Text>
                       </View>
                     </View>
