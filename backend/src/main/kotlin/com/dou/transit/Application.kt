@@ -1,6 +1,7 @@
 package com.dou.transit
 
 import com.dou.transit.config.AppConfig
+import com.dou.transit.models.*
 import com.dou.transit.routes.*
 import com.dou.transit.services.DatabaseService
 import com.dou.transit.services.NotificationService
