@@ -92,7 +92,7 @@ fun processPendingWithdrawals() {
             val userId = pendingRs.getString("user_id")
             val amount = pendingRs.getDouble("amount")
             val reference = pendingRs.getString("reference")
-            val bankStmt = conn.prepareStatement("SELECT bank_account_number, bank_code FROM driver_details WHERE user_id = ?::uuid LIMIT 1")
+            val bankStmt = conn.prepareStatement("SELECT bank_account_number, bank_code FROM profiles WHERE id = ?::uuid LIMIT 1")
             bankStmt.setString(1, userId)
             val bankRs = bankStmt.executeQuery()
             if (!bankRs.next()) { markWithdrawalFailed(conn, txId, "No bank details"); continue }

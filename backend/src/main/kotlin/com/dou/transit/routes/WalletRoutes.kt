@@ -563,7 +563,7 @@ fun Route.walletRoutes() {
 
         // ============================================================
         // POST /api/wallet/settlement-account
-        // Save settlement account details (OPay / Bank) from SettingsScreen
+        // Save bank account details for any user (students, drivers, etc.)
         // ============================================================
         post("/settlement-account") {
             val req = try { call.receive<SettlementAccountRequest>() }
@@ -577,27 +577,34 @@ fun Route.walletRoutes() {
             try {
                 DatabaseService.ensureProfileExists(conn, userId)
 
+                // Save bank details to profiles table (works for all users)
                 val stmt = conn.prepareStatement("""
-                    UPDATE driver_details
+                    UPDATE profiles
                     SET bank_name = ?, bank_account_number = ?, bank_code = ?, updated_at = now()
-                    WHERE user_id = ?::uuid
+                    WHERE id = ?::uuid
                 """.trimIndent())
                 stmt.setString(1, req.bankName)
                 stmt.setString(2, req.accountNumber)
                 stmt.setString(3, req.bankCode ?: "")
                 stmt.setString(4, userId)
-                val updated = stmt.executeUpdate()
+                stmt.executeUpdate()
 
-                if (updated == 0) {
-                    // Update user phone or details in profiles as fallback
-                    conn.prepareStatement("UPDATE profiles SET phone = ? WHERE id = ?::uuid")
-                        .apply { setString(1, req.accountNumber); setString(2, userId); executeUpdate() }
-                }
+                // Also update driver_details if user is a driver (for backward compatibility)
+                val driverStmt = conn.prepareStatement("""
+                    UPDATE driver_details
+                    SET bank_name = ?, bank_account_number = ?, bank_code = ?, updated_at = now()
+                    WHERE user_id = ?::uuid
+                """.trimIndent())
+                driverStmt.setString(1, req.bankName)
+                driverStmt.setString(2, req.accountNumber)
+                driverStmt.setString(3, req.bankCode ?: "")
+                driverStmt.setString(4, userId)
+                driverStmt.executeUpdate()
 
-                call.respond(SuccessResponse("Settlement account updated successfully"))
+                call.respond(SuccessResponse("Bank details saved successfully"))
             } catch (e: Exception) {
                 println("[WALLET] Settlement account update error: ${e.message}")
-                call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to update settlement account", e.message))
+                call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to save bank details", e.message))
             } finally {
                 conn.close()
             }
