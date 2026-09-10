@@ -252,6 +252,80 @@ To transition the system from a prototype to a high-end, production-ready campus
 
 ---
 
+## AUTOMATED PAYMENT RECONCILIATION & PAYOUT SYSTEM
+
+### Problem: Stuck Transactions and Manual Resolution
+Previously, when users cancelled Flutterwave payments or completed them without proper callback handling, transactions remained stuck in "processing" state indefinitely. Users had no way to resolve these issues, and withdrawals required manual intervention.
+
+### Solution: Fully Automated Background Jobs
+
+#### 1. Automated Deposit Reconciliation (Every 2 Minutes)
+- **Location:** `backend/src/main/kotlin/com/dou/transit/BackgroundJobs.kt`
+- **Function:** `reconcilePendingDeposits()`
+- **Behavior:**
+  - Automatically finds pending deposits older than 2 minutes
+  - Queries Flutterwave's verification API for each transaction
+  - **If successful:** Credits the wallet with net amount (total - ₦10 platform fee)
+  - **If cancelled/failed:** Marks transaction as "failed" to stop showing as "processing"
+  - Processes up to 5 transactions per run
+
+#### 2. Automated Withdrawal Processing (Every 5 Minutes)
+- **Location:** `backend/src/main/kotlin/com/dou/transit/BackgroundJobs.kt`
+- **Function:** `processPendingWithdrawals()`
+- **Behavior:**
+  - Finds pending withdrawals in the database
+  - Retrieves user's bank details from their profile
+  - Validates sufficient balance
+  - Initiates Flutterwave Transfers API to send money to user's bank
+  - **On success:** Deducts balance and marks as "completed"
+  - **On failure:** Marks as "failed" with reason (no bank details, insufficient balance, transfer failed)
+  - Processes up to 5 withdrawals per run
+
+#### 3. New API Endpoints Added
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/wallet/deposit/webhook` | POST | Flutterwave webhook for real-time payment notifications |
+| `/api/wallet/deposit/callback` | GET | Flutterwave redirect URL after payment completion |
+| `/api/wallet/deposit/cancel` | POST | Mark a pending deposit as failed (user cancelled) |
+| `/api/wallet/deposit/reconcile` | POST | Manually trigger reconciliation (admin/debug) |
+| `/api/wallet/deposit/manual-fix` | POST | Manually resolve stuck deposits (fail or complete) |
+
+#### 4. Database Migration for Universal Bank Support
+- **File:** `backend/src/main/resources/migration-add-bank-details.sql`
+- **Change:** Added `bank_name`, `bank_account_number`, `bank_code` columns to `profiles` table
+- **Impact:** Any user (student, driver, security, admin, vendor) can now save bank details and receive payouts
+- **Backward Compatibility:** Settlement account endpoint also updates `driver_details` for existing driver data
+
+#### 5. Frontend Payment Flow Improvements
+- **DepositSheet.tsx:** Removed misleading "Flutterwave Checkout Ready" message; now shows "Payment Initiated" with clear instructions
+- **StudentWalletScreen.tsx:** Added polling verification (3 attempts, 3 seconds apart) after returning from Flutterwave
+- **Shared.tsx:** Added reference number display for pending/failed transactions in transaction history
+- **WalletStyles.tsx:** Added `txReference` style with monospace font for clear reference display
+- **walletStore.ts:** Added `cancelDeposit` action for user-initiated cancellation
+
+### Key Features
+
+1. **Self-Healing System:** No manual intervention required for stuck transactions
+2. **Universal Payout Support:** Any user can save bank details and receive withdrawals
+3. **Real-Time Notifications:** Flutterwave webhooks provide instant payment confirmation
+4. **Graceful Failure Handling:** Failed transactions are properly marked with reasons
+5. **Reference Number Visibility:** Full reference numbers displayed in UI for easy tracking
+6. **Balance Protection:** Withdrawals only processed if sufficient completed balance exists
+
+### Configuration
+
+**Flutterwave Webhook URL (for Flutterwave Dashboard):**
+```
+https://dou-transit-api.onrender.com/api/wallet/deposit/webhook
+```
+
+**Background Job Intervals:**
+- Deposit Reconciliation: Every 2 minutes
+- Withdrawal Processing: Every 5 minutes
+
+---
+
 ## CHAPTER FIVE: SUMMARY, CONCLUSION, AND RECOMMENDATIONS
 
 ### 5.1 Summary
