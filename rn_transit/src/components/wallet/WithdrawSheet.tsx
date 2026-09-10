@@ -22,17 +22,17 @@ interface WithdrawSheetProps {
 }
 
 const BANKS = [
-  { code: '999992', name: 'OPay (Digital Services)' },
-  { code: '999991', name: 'PalmPay' },
-  { code: '000031', name: 'Moniepoint MFB' },
-  { code: '000019', name: 'GTBank (Guaranty Trust)' },
-  { code: '000004', name: 'Zenith Bank' },
-  { code: '000013', name: 'Access Bank' },
-  { code: '000007', name: 'First Bank of Nigeria' },
-  { code: '000002', name: 'United Bank for Africa (UBA)' },
-  { code: '000001', name: 'Fidelity Bank' },
-  { code: '000008', name: 'Sterling Bank' },
-  { code: '000009', name: 'Wema Bank / ALAT' },
+  { code: '000019', name: 'GTBank (Guaranty Trust)', supportsVerification: true },
+  { code: '000004', name: 'Zenith Bank', supportsVerification: true },
+  { code: '000013', name: 'Access Bank', supportsVerification: true },
+  { code: '000007', name: 'First Bank of Nigeria', supportsVerification: true },
+  { code: '000002', name: 'United Bank for Africa (UBA)', supportsVerification: true },
+  { code: '000001', name: 'Fidelity Bank', supportsVerification: true },
+  { code: '000008', name: 'Sterling Bank', supportsVerification: true },
+  { code: '000009', name: 'Wema Bank / ALAT', supportsVerification: true },
+  { code: '999992', name: 'OPay (Digital Services)', supportsVerification: false },
+  { code: '999991', name: 'PalmPay', supportsVerification: false },
+  { code: '000031', name: 'Moniepoint MFB', supportsVerification: false },
 ];
 
 export function WithdrawSheet({ visible, onClose, onSubmit, currentBalance }: WithdrawSheetProps) {
@@ -49,6 +49,12 @@ export function WithdrawSheet({ visible, onClose, onSubmit, currentBalance }: Wi
   useEffect(() => {
     setVerifiedAccountName(null);
     setAccountError(null);
+    
+    // Skip verification for banks that don't support it
+    if (selectedBank?.supportsVerification === false) {
+      setAccountError('Verification not available for this bank');
+      return;
+    }
     
     if (accountNumber.length === 10 && selectedBank) {
       verifyAccountNumber();
