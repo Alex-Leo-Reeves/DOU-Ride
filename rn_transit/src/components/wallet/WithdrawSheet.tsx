@@ -129,6 +129,9 @@ export function WithdrawSheet({ visible, onClose, onSubmit, currentBalance }: Wi
             placeholderTextColor={Colors.slate400}
             keyboardType="number-pad"
           />
+          <Text style={styles.balanceInfo}>
+            Available Balance: ₦{currentBalance.toLocaleString()}
+          </Text>
 
           <Text style={styles.sectionTitle}>Receiving Bank / Fintech</Text>
           <TouchableOpacity

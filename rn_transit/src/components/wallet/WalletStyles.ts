@@ -87,6 +87,13 @@ export const walletStyles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
+  balanceInfo: {
+    fontSize: FontSize.xs,
+    color: Colors.slate500,
+    marginTop: 4,
+    marginBottom: Spacing.sm,
+    fontWeight: '600',
+  },
   txRow: {
     flexDirection: 'row',
     alignItems: 'center',
