@@ -632,34 +632,40 @@ fun Route.walletRoutes() {
                     put("account_bank", JsonPrimitive(bankCode))
                 }
 
+                println("[VERIFY] Calling Flutterwave API with payload: $verifyPayload")
                 val verifyResp = httpClient.post("https://api.flutterwave.com/v3/accounts/resolve") {
                     header(HttpHeaders.Authorization, "Bearer ${AppConfig.flutterwaveSecretKey}")
                     contentType(ContentType.Application.Json)
                     setBody(verifyPayload.toString())
                 }
 
+                println("[VERIFY] Flutterwave response status: ${verifyResp.status}")
+                val responseBody = verifyResp.bodyAsText()
+                println("[VERIFY] Flutterwave response body: $responseBody")
+
                 if (verifyResp.status.isSuccess()) {
                     val json = Json { ignoreUnknownKeys = true }
-                    val responseBody = json.parseToJsonElement(verifyResp.bodyAsText()).jsonObject
-                    val status = responseBody["status"]?.jsonPrimitive?.contentOrNull
-                    val data = responseBody["data"]?.jsonObject
+                    val responseJson = json.parseToJsonElement(responseBody).jsonObject
+                    val status = responseJson["status"]?.jsonPrimitive?.contentOrNull
+                    val data = responseJson["data"]?.jsonObject
                     val accountName = data?.get("account_name")?.jsonPrimitive?.contentOrNull
-                    val accountNumber = data?.get("account_number")?.jsonPrimitive?.contentOrNull
+                    val resolvedAccountNumber = data?.get("account_number")?.jsonPrimitive?.contentOrNull
 
                     if (status == "success" && accountName != null) {
                         call.respond(buildJsonObject {
                             put("accountName", accountName)
-                            put("accountNumber", accountNumber)
+                            put("accountNumber", resolvedAccountNumber)
                         })
                     } else {
-                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Could not verify account", "Account not found"))
+                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Could not verify account", "Account not found or invalid"))
                     }
                 } else {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Verification failed", "Could not verify account"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Verification failed", "Flutterwave API returned ${verifyResp.status}"))
                 }
                 httpClient.close()
             } catch (e: Exception) {
-                println("[WALLET] Account verification error: ${e.message}")
+                println("[VERIFY] Account verification error: ${e.message}")
+                e.printStackTrace()
                 call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Verification failed", e.message))
             }
         }
