@@ -9,6 +9,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import { ArrowDownLeft, ShieldCheck, Check } from 'lucide-react-native';
 import { Colors } from '../../config/theme';
 import { walletStyles as styles } from './WalletStyles';
 import { FeeRow } from './Shared';
@@ -28,68 +29,102 @@ export function DepositSheet({ visible, onClose, onSubmit }: DepositSheetProps) 
 
   const handleSubmit = async () => {
     if (numAmount < 100) {
-      Alert.alert('Error', 'Minimum deposit is ₦100');
+      Alert.alert('Minimum Amount', 'Minimum deposit is ₦100 to cover gateway processing.');
       return;
     }
     setIsProcessing(true);
-    const result = await onSubmit(numAmount);
-    setIsProcessing(false);
-    if (result) {
-      Alert.alert('Payment Link Generated', `Ref: ${result.substring(0, 12)}...`, [
-        { text: 'OK', onPress: onClose },
-      ]);
+    try {
+      const result = await onSubmit(numAmount);
+      setIsProcessing(false);
+      if (result) {
+        Alert.alert(
+          'Flutterwave Checkout Ready',
+          `Payment Reference: ${result.substring(0, 14)}...\nYour wallet will be credited ₦${numAmount.toLocaleString()} upon payment.`,
+          [{ text: 'Proceed', onPress: onClose }]
+        );
+      }
+    } catch {
+      setIsProcessing(false);
     }
   };
 
   return (
-    <Modal visible={visible} animationType="slide" transparent>
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <KeyboardAvoidingView style={styles.overlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <View style={styles.sheet}>
           <View style={styles.handle} />
-          <Text style={styles.sheetTitle}>Deposit Funds</Text>
-          <Text style={styles.sheetSubtitle}>Add money to your wallet</Text>
 
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+            <View style={{
+              width: 36,
+              height: 36,
+              borderRadius: 18,
+              backgroundColor: Colors.primarySoft,
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginRight: 10,
+            }}>
+              <ArrowDownLeft size={20} color={Colors.primaryAccent} strokeWidth={2.5} />
+            </View>
+            <Text style={styles.sheetTitle}>Deposit Funds</Text>
+          </View>
+          <Text style={styles.sheetSubtitle}>Top up your DOU Transit wallet via Flutterwave</Text>
+
+          <Text style={styles.sectionTitle}>Select Quick Amount</Text>
           <View style={styles.quickRow}>
-            {quickAmounts.map((a) => (
-              <TouchableOpacity
-                key={a}
-                style={[styles.quickChip, numAmount === a && styles.quickChipActive]}
-                onPress={() => setAmount(a.toString())}
-              >
-                <Text style={[styles.quickChipText, numAmount === a && styles.quickChipTextActive]}>
-                  ₦{a}
-                </Text>
-              </TouchableOpacity>
-            ))}
+            {quickAmounts.map((a) => {
+              const isSelected = numAmount === a;
+              return (
+                <TouchableOpacity
+                  key={a}
+                  style={[styles.quickChip, isSelected && styles.quickChipActive]}
+                  onPress={() => setAmount(a.toString())}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.quickChipText, isSelected && styles.quickChipTextActive]}>
+                    ₦{a.toLocaleString()}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
           </View>
 
+          <Text style={styles.sectionTitle}>Or Enter Manual Amount</Text>
           <TextInput
             style={styles.input}
             value={amount}
             onChangeText={setAmount}
-            placeholder="Or enter custom amount"
-            placeholderTextColor={Colors.grey}
-            keyboardType="numeric"
+            placeholder="e.g. 750 (Min ₦100)"
+            placeholderTextColor={Colors.slate400}
+            keyboardType="number-pad"
           />
 
           {numAmount > 0 && (
             <View style={styles.feeBox}>
-              <FeeRow label="Amount" value={numAmount} />
-              <FeeRow label="Platform Fee" value={fee} />
+              <FeeRow label="Wallet Credit" value={numAmount} />
+              <FeeRow label="Gateway Fee" value={fee} />
               <View style={styles.divider} />
-              <FeeRow label="Total Charge" value={numAmount + fee} bold />
+              <FeeRow label="Total Charged to Card/Bank" value={numAmount + fee} bold />
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8 }}>
+                <ShieldCheck size={14} color={Colors.success} strokeWidth={2.5} />
+                <Text style={{ fontSize: 11, color: Colors.slate500, marginLeft: 5 }}>
+                  Secured by Flutterwave Bank Transfer / Card
+                </Text>
+              </View>
             </View>
           )}
 
           <TouchableOpacity
-            style={[styles.primaryBtn, (!numAmount || isProcessing) && styles.disabledBtn]}
+            style={[styles.primaryBtn, (!numAmount || numAmount < 100 || isProcessing) && styles.disabledBtn]}
             onPress={handleSubmit}
-            disabled={!numAmount || isProcessing}
+            disabled={!numAmount || numAmount < 100 || isProcessing}
+            activeOpacity={0.85}
           >
             <Text style={styles.primaryBtnText}>
-              {isProcessing ? 'Processing...' : 'DEPOSIT'}
+              {isProcessing ? 'Connecting Flutterwave...' : `PAY ₦${(numAmount + fee).toLocaleString()}`}
             </Text>
           </TouchableOpacity>
+
           <TouchableOpacity onPress={onClose} style={styles.cancelBtn}>
             <Text style={styles.cancelBtnText}>Cancel</Text>
           </TouchableOpacity>

@@ -1,51 +1,191 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  SafeAreaView,
+  TouchableOpacity,
+  Image,
+  StatusBar,
+} from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { Colors, FontSize, BorderRadius, Shadows } from '../../config/theme';
+import {
+  X,
+  Share2,
+  PlusSquare,
+  CheckCircle2,
+  Download,
+  Smartphone,
+  Sparkles,
+  ArrowRight,
+  ChevronRight,
+  MoreVertical,
+} from 'lucide-react-native';
+import { Colors, FontSize, BorderRadius, Shadows, Spacing } from '../../config/theme';
+import { DouCard } from '../../components/DouCard';
 
-const steps = [
-  { icon: '📤', title: 'Step 1', description: 'Tap the Share button at the bottom of Safari', detail: 'Look for the square icon with an upward arrow.' },
-  { icon: '📲', title: 'Step 2', description: 'Scroll down and tap "Add to Home Screen"', detail: 'In the share menu, find "Add to Home Screen".' },
-  { icon: '✏️', title: 'Step 3', description: 'Confirm the name and tap "Add"', detail: 'Keep the name as "DOU Transit" or customize it.' },
-  { icon: '✅', title: 'Done! ✓', description: 'DOU Transit is now on your home screen', detail: 'The app works like a native app now.' },
+const IOS_STEPS = [
+  {
+    icon: Share2,
+    title: 'Tap Safari Share Button',
+    description: 'At the bottom of your Safari browser, tap the Share icon (square with upward arrow).',
+  },
+  {
+    icon: PlusSquare,
+    title: 'Select "Add to Home Screen"',
+    description: 'Scroll down the options menu and select "Add to Home Screen".',
+  },
+  {
+    icon: CheckCircle2,
+    title: 'Confirm & Launch Native App',
+    description: 'Tap "Add" in the top-right corner. DOU Transit will launch in full screen with zero browser bars.',
+  },
+];
+
+const ANDROID_STEPS = [
+  {
+    icon: MoreVertical,
+    title: 'Open Chrome Options',
+    description: 'Tap the three vertical dots menu in the top right corner of Google Chrome.',
+  },
+  {
+    icon: Download,
+    title: 'Install DOU Ride App',
+    description: 'Select "Install app" or "Add to Home Screen" from the Chrome dropdown.',
+  },
+  {
+    icon: CheckCircle2,
+    title: 'Instant Native Experience',
+    description: 'The app icon appears on your home screen with offline caching and instant launch enabled.',
+  },
 ];
 
 export default function PwaInstallScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<any>>();
+  const [platformTab, setPlatformTab] = useState<'ios' | 'android'>('ios');
   const [currentStep, setCurrentStep] = useState(0);
-  const [dontShowAgain, setDontShowAgain] = useState(false);
+
+  const steps = platformTab === 'ios' ? IOS_STEPS : ANDROID_STEPS;
+  const StepIcon = steps[currentStep].icon;
 
   return (
     <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="dark-content" backgroundColor={Colors.white} />
+
+      {/* Header */}
+      <View style={styles.header}>
+        <View style={styles.headerLeft}>
+          <Image
+            source={require('../../../assets/dou-logo.jpeg')}
+            style={styles.logoMini}
+            resizeMode="cover"
+          />
+          <View>
+            <Text style={styles.headerTitle}>Install DOU Transit</Text>
+            <Text style={styles.headerSubtitle}>Native PWA • No App Store Required</Text>
+          </View>
+        </View>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.closeBtn}>
+          <X size={20} color={Colors.slate500} />
+        </TouchableOpacity>
+      </View>
+
       <View style={styles.content}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.closeBtn}><Text style={styles.closeText}>✕</Text></TouchableOpacity>
-        <View style={styles.logo}>
-          <Text style={styles.logoText}>DOU</Text>
+        {/* Platform Selector Tabs */}
+        <View style={styles.tabSection}>
+          <TouchableOpacity
+            style={[styles.tabBtn, platformTab === 'ios' && styles.tabBtnActive]}
+            onPress={() => {
+              setPlatformTab('ios');
+              setCurrentStep(0);
+            }}
+            activeOpacity={0.8}
+          >
+            <Smartphone size={16} color={platformTab === 'ios' ? Colors.white : Colors.slate600} />
+            <Text style={[styles.tabBtnText, platformTab === 'ios' && styles.tabBtnTextActive]}>
+              Apple iOS (Safari)
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.tabBtn, platformTab === 'android' && styles.tabBtnActive]}
+            onPress={() => {
+              setPlatformTab('android');
+              setCurrentStep(0);
+            }}
+            activeOpacity={0.8}
+          >
+            <Download size={16} color={platformTab === 'android' ? Colors.white : Colors.slate600} />
+            <Text style={[styles.tabBtnText, platformTab === 'android' && styles.tabBtnTextActive]}>
+              Android (Chrome)
+            </Text>
+          </TouchableOpacity>
         </View>
 
-        <View style={styles.stepContainer}>
-          <View style={styles.stepIconBox}><Text style={styles.stepIcon}>{steps[currentStep].icon}</Text></View>
+        {/* Step Visualizer Card */}
+        <DouCard variant="elevated" padding={Spacing.xl} style={styles.stepCard}>
+          <View style={styles.stepIconWrap}>
+            <StepIcon size={40} color={Colors.primary} />
+          </View>
+
+          <View style={styles.stepCounterBadge}>
+            <Text style={styles.stepCounterText}>
+              STEP {currentStep + 1} OF {steps.length}
+            </Text>
+          </View>
+
           <Text style={styles.stepTitle}>{steps[currentStep].title}</Text>
           <Text style={styles.stepDescription}>{steps[currentStep].description}</Text>
-          <Text style={styles.stepDetail}>{steps[currentStep].detail}</Text>
-        </View>
 
-        <View style={styles.dots}><View style={[styles.dot, { backgroundColor: currentStep === 0 ? Colors.black : Colors.lightGrey }]} /></View>
+          {/* Dots Indicator */}
+          <View style={styles.dotsRow}>
+            {steps.map((_, i) => (
+              <View
+                key={i}
+                style={[
+                  styles.dot,
+                  i === currentStep && styles.dotActive,
+                ]}
+              />
+            ))}
+          </View>
+        </DouCard>
 
-        <View style={styles.bottom}>
-          <TouchableOpacity onPress={() => setDontShowAgain(!dontShowAgain)} style={styles.checkboxRow}>
-            <View style={[styles.checkbox, dontShowAgain && styles.checkboxChecked]} />
-            <Text style={styles.checkboxLabel}>Don't show this again</Text>
-          </TouchableOpacity>
-          <View style={styles.buttons}>
+        {/* Fast Action Buttons */}
+        <View style={styles.bottomButtons}>
+          <View style={styles.btnRow}>
             {currentStep > 0 && (
-              <TouchableOpacity style={styles.outlinedBtn} onPress={() => setCurrentStep(s => s - 1)}><Text style={styles.outlinedBtnText}>Back</Text></TouchableOpacity>
+              <TouchableOpacity
+                style={styles.backBtn}
+                onPress={() => setCurrentStep((s) => s - 1)}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.backBtnText}>Previous</Text>
+              </TouchableOpacity>
             )}
-            <TouchableOpacity style={styles.primaryBtn} onPress={() => { if (currentStep < steps.length - 1) setCurrentStep(s => s + 1); else navigation.goBack(); }}>
-              <Text style={styles.primaryBtnText}>{currentStep < steps.length - 1 ? 'Next' : 'Got it!'}</Text>
+
+            <TouchableOpacity
+              style={styles.nextBtn}
+              onPress={() => {
+                if (currentStep < steps.length - 1) {
+                  setCurrentStep((s) => s + 1);
+                } else {
+                  navigation.goBack();
+                }
+              }}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.nextBtnText}>
+                {currentStep < steps.length - 1 ? 'Next Step' : 'Got it, Open Transit'}
+              </Text>
+              <ChevronRight size={18} color={Colors.white} />
             </TouchableOpacity>
           </View>
+
+          <Text style={styles.offlineNote}>
+            ⚡ Instant launch with offline local caching for campus dead zones
+          </Text>
         </View>
       </View>
     </SafeAreaView>
@@ -53,28 +193,180 @@ export default function PwaInstallScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.white },
-  content: { flex: 1, padding: 24, alignItems: 'center', justifyContent: 'space-between' },
-  closeBtn: { alignSelf: 'flex-end', padding: 8 },
-  closeText: { fontSize: 20, color: Colors.black },
-  logo: { width: 100, height: 100, borderRadius: 22, backgroundColor: Colors.black, justifyContent: 'center', alignItems: 'center', ...Shadows.lg },
-  logoText: { color: Colors.white, fontSize: 22, fontWeight: 'bold' },
-  stepContainer: { alignItems: 'center', paddingHorizontal: 16 },
-  stepIconBox: { width: 80, height: 80, borderRadius: 20, backgroundColor: Colors.black, justifyContent: 'center', alignItems: 'center', marginBottom: 24 },
-  stepIcon: { fontSize: 36 },
-  stepTitle: { fontSize: 14, fontWeight: '600', color: Colors.grey, letterSpacing: 1, marginBottom: 8 },
-  stepDescription: { fontSize: 20, fontWeight: 'bold', color: Colors.black, textAlign: 'center', marginBottom: 12 },
-  stepDetail: { fontSize: FontSize.md, color: Colors.grey, textAlign: 'center', lineHeight: 22 },
-  dots: { flexDirection: 'row', marginVertical: 16 },
-  dot: { width: 8, height: 8, borderRadius: 4, marginHorizontal: 4 },
-  bottom: { width: '100%' },
-  checkboxRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
-  checkbox: { width: 24, height: 24, borderRadius: 4, borderWidth: 2, borderColor: Colors.black, marginRight: 12 },
-  checkboxChecked: { backgroundColor: Colors.black },
-  checkboxLabel: { fontSize: FontSize.md, color: Colors.grey },
-  buttons: { flexDirection: 'row', gap: 12 },
-  outlinedBtn: { flex: 1, borderWidth: 2, borderColor: Colors.black, borderRadius: BorderRadius.md, padding: 16, alignItems: 'center' },
-  outlinedBtnText: { fontSize: FontSize.lg, fontWeight: 'bold', color: Colors.black },
-  primaryBtn: { flex: 1, backgroundColor: Colors.black, borderRadius: BorderRadius.md, padding: 16, alignItems: 'center', ...Shadows.md },
-  primaryBtnText: { fontSize: FontSize.lg, fontWeight: 'bold', color: Colors.white },
+  container: {
+    flex: 1,
+    backgroundColor: Colors.white,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.slate200,
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  logoMini: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+  },
+  headerTitle: {
+    fontSize: FontSize.base,
+    fontFamily: 'Inter_700Bold',
+    color: Colors.slate900,
+  },
+  headerSubtitle: {
+    fontSize: 10,
+    fontFamily: 'Inter_500Medium',
+    color: Colors.slate500,
+  },
+  closeBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: Colors.slate100,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  content: {
+    flex: 1,
+    padding: Spacing.lg,
+    justifyContent: 'space-between',
+  },
+  tabSection: {
+    flexDirection: 'row',
+    backgroundColor: Colors.slate100,
+    padding: 4,
+    borderRadius: BorderRadius.full,
+    gap: 4,
+  },
+  tabBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: BorderRadius.full,
+  },
+  tabBtnActive: {
+    backgroundColor: Colors.primary,
+    ...Shadows.sm,
+  },
+  tabBtnText: {
+    fontSize: FontSize.xs,
+    fontFamily: 'Inter_500Medium',
+    color: Colors.slate600,
+  },
+  tabBtnTextActive: {
+    color: Colors.white,
+    fontFamily: 'Inter_700Bold',
+  },
+  stepCard: {
+    alignItems: 'center',
+    textAlign: 'center',
+    borderRadius: BorderRadius.xl,
+    marginVertical: Spacing.md,
+  },
+  stepIconWrap: {
+    width: 80,
+    height: 80,
+    borderRadius: 24,
+    backgroundColor: Colors.primary + '15',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: Spacing.md,
+  },
+  stepCounterBadge: {
+    backgroundColor: Colors.slate100,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: BorderRadius.full,
+    marginBottom: Spacing.sm,
+  },
+  stepCounterText: {
+    fontSize: 10,
+    fontFamily: 'Inter_700Bold',
+    color: Colors.slate600,
+    letterSpacing: 0.5,
+  },
+  stepTitle: {
+    fontSize: FontSize.lg,
+    fontFamily: 'Inter_700Bold',
+    color: Colors.slate900,
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  stepDescription: {
+    fontSize: FontSize.sm,
+    fontFamily: 'Inter_400Regular',
+    color: Colors.slate600,
+    textAlign: 'center',
+    lineHeight: 22,
+    paddingHorizontal: Spacing.sm,
+    marginBottom: Spacing.lg,
+  },
+  dotsRow: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: Colors.slate200,
+  },
+  dotActive: {
+    width: 24,
+    backgroundColor: Colors.primary,
+  },
+  bottomButtons: {
+    gap: Spacing.sm,
+    paddingBottom: Spacing.md,
+  },
+  btnRow: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+  },
+  backBtn: {
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderRadius: BorderRadius.md,
+    backgroundColor: Colors.slate100,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  backBtnText: {
+    fontSize: FontSize.sm,
+    fontFamily: 'Inter_600SemiBold',
+    color: Colors.slate700,
+  },
+  nextBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: Colors.primary,
+    paddingVertical: 14,
+    borderRadius: BorderRadius.md,
+    ...Shadows.md,
+  },
+  nextBtnText: {
+    fontSize: FontSize.sm,
+    fontFamily: 'Inter_700Bold',
+    color: Colors.white,
+  },
+  offlineNote: {
+    fontSize: 11,
+    fontFamily: 'Inter_500Medium',
+    color: Colors.slate400,
+    textAlign: 'center',
+  },
 });

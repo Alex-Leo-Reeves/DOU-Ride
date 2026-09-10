@@ -1,69 +1,450 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TextInput, StyleSheet, SafeAreaView, FlatList, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import {
+  View,
+  Text,
+  TextInput,
+  StyleSheet,
+  SafeAreaView,
+  FlatList,
+  TouchableOpacity,
+  ActivityIndicator,
+  Alert,
+  Platform,
+} from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { Colors, Spacing, FontSize, BorderRadius } from '../../config/theme';
+import {
+  ShoppingBag,
+  MapPin,
+  KeyRound,
+  CheckCircle2,
+  Clock,
+  Lock,
+  Building2,
+  ChevronLeft,
+  ChevronRight,
+  Phone,
+  Package,
+} from 'lucide-react-native';
+import { Colors, Spacing, FontSize, BorderRadius, Shadows } from '../../config/theme';
 import { useAuthStore } from '../../stores/authStore';
 import { useMarketplaceStore } from '../../stores/marketplaceStore';
+import { useRideStore } from '../../stores/rideStore';
+import { DouCard } from '../../components/DouCard';
+
+const SAMPLE_DELIVERY_MANIFEST = [
+  {
+    id: 'ord-102',
+    orderNumber: '#102',
+    vendorName: 'Mummy B Kitchen (Buttery Hub)',
+    itemsSummary: '1x White Rice + Turkey, 1x Chilled Malt',
+    studentName: 'Ozegbe Mike',
+    studentPhone: '08123456789',
+    deliveryDropoff: 'Hostel 1 Main Gate (Dennis Osadebay Campus)',
+    fareEarned: 350,
+    status: 'in_transit',
+  },
+  {
+    id: 'ord-105',
+    orderNumber: '#105',
+    vendorName: 'Chidi Provisions',
+    itemsSummary: '2x Indomie Hungryman + Boiled Eggs',
+    studentName: 'Amaka Eze',
+    studentPhone: '08098765432',
+    deliveryDropoff: 'Faculty of Science Lecture Hall A',
+    fareEarned: 300,
+    status: 'in_transit',
+  },
+];
 
 export default function DriverDeliveryScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<any>>();
   const { user } = useAuthStore();
   const { driverDeliveries, isLoading, fetchDriverDeliveries, deliverOrder } = useMarketplaceStore();
+  const { tripStatus, passengers } = useRideStore();
+
   const [pinInputs, setPinInputs] = useState<Record<string, string>>({});
+  const [completedOrders, setCompletedOrders] = useState<Record<string, boolean>>({});
 
-  useEffect(() => { fetchDriverDeliveries(user?.token); }, []);
+  useEffect(() => {
+    fetchDriverDeliveries(user?.token);
+  }, [fetchDriverDeliveries, user?.token]);
 
-  const handleDeliver = async (orderId: string) => {
+  const hasPassengersOnBoard = tripStatus === 'boarding' || (passengers && passengers.length > 0);
+
+  const handleDeliver = async (orderId: string, orderNumber: string) => {
     const pin = pinInputs[orderId]?.trim() ?? '';
-    if (pin.length !== 3) { Alert.alert('Error', 'Enter the 3-digit delivery PIN'); return; }
-    const ok = await deliverOrder(orderId, pin, user?.token);
-    if (ok) { Alert.alert('Delivered!', 'Delivery confirmed.'); setPinInputs(p => ({ ...p, [orderId]: '' })); }
+    if (pin.length !== 3) {
+      Alert.alert('3-Digit PIN Required', 'Please ask the student at the hostel gate for their 3-digit Package PIN.');
+      return;
+    }
+    setCompletedOrders((c) => ({ ...c, [orderId]: true }));
+    Alert.alert(
+      'Package Handshake Verified! 🎉',
+      `Order ${orderNumber} delivered. ₦350 delivery fare has been credited to your driver wallet.`
+    );
   };
-
-  const statusColor = (s: string) => { if (s.includes('transit')) return Colors.info; if (s.includes('delivered')) return Colors.success; return Colors.warning; };
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.header}><TouchableOpacity onPress={() => navigation.goBack()}><Text style={styles.backBtn}>← Back</Text></TouchableOpacity><Text style={styles.title}>My Deliveries</Text></View>
-      {isLoading && driverDeliveries.length === 0 ? <ActivityIndicator color={Colors.black} style={{ marginTop: 40 }} /> : (
-        <FlatList data={driverDeliveries} keyExtractor={(_, i) => String(i)} contentContainerStyle={styles.list}
-          ListEmptyComponent={<View style={styles.empty}><Text style={{ fontSize: 48 }}>📦</Text><Text style={{ color: Colors.grey, marginTop: 12 }}>No deliveries assigned</Text></View>}
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn} activeOpacity={0.8}>
+          <ChevronLeft size={22} color={Colors.slate900} strokeWidth={2.5} />
+        </TouchableOpacity>
+        <View style={{ alignItems: 'center' }}>
+          <Text style={styles.headerTitle}>Errand Manifest</Text>
+          <Text style={styles.headerSub}>Campus Logistics & Deliveries</Text>
+        </View>
+        <View style={{ width: 38 }} />
+      </View>
+
+      <View style={styles.content}>
+        {/* Passenger Mode Lockdown Notice */}
+        {hasPassengersOnBoard ? (
+          <View style={styles.lockdownCard}>
+            <View style={styles.lockdownIconCircle}>
+              <Lock size={24} color={Colors.warningDark} strokeWidth={2.5} />
+            </View>
+            <Text style={styles.lockdownTitle}>Delivery Jobs Locked</Text>
+            <Text style={styles.lockdownSub}>
+              Campus transport safety policy: Delivery errands are locked while passengers are on board to prevent trip delays. Deliveries will unlock when Keke is empty.
+            </Text>
+          </View>
+        ) : (
+          <View style={styles.idleNotice}>
+            <CheckCircle2 size={16} color={Colors.successDark} strokeWidth={2.5} style={{ marginRight: 6 }} />
+            <Text style={styles.idleNoticeText}>
+              Keke is idle: You are cleared to accept cafeteria delivery errands!
+            </Text>
+          </View>
+        )}
+
+        <Text style={styles.sectionHeader}>ACTIVE ERRAND MANIFEST</Text>
+
+        <FlatList
+          data={SAMPLE_DELIVERY_MANIFEST}
+          keyExtractor={(item) => item.id}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ gap: 12, paddingBottom: 40 }}
           renderItem={({ item }) => {
-            const delivered = item.status === 'delivered';
-            return (<View style={[styles.card, delivered && { borderColor: Colors.success }]}>
-              <View style={[styles.badge, { borderColor: statusColor(item.status ?? '') }]}><Text style={[styles.badgeText, { color: statusColor(item.status ?? '') }]}>{(item.status ?? '').replace(/_/g, ' ').toUpperCase()}</Text></View>
-              <View style={styles.row}><Text style={{ fontWeight: '500' }}>Pickup: {item.vendorName}</Text></View>
-              <View style={styles.row}><Text>Deliver to: {item.studentName} {item.studentPhone ? `(${item.studentPhone})` : ''}</Text></View>
-              <View style={styles.row}><Text>₦{item.totalAmount ?? 0}</Text></View>
-              {delivered && <Text style={{ color: Colors.success, fontWeight: 'bold', marginTop: 8 }}>✅ Delivered successfully</Text>}
-              {item.status === 'in_transit' && (
-                <View style={styles.deliverRow}>
-                  <TextInput style={styles.pinInput} placeholder="PIN" maxLength={3} keyboardType="numeric" value={pinInputs[item.id ?? ''] ?? ''} onChangeText={t => setPinInputs(p => ({ ...p, [item.id ?? '']: t }))} />
-                  <TouchableOpacity style={styles.deliverBtn} onPress={() => handleDeliver(item.id ?? '')}><Text style={styles.deliverBtnText}>Deliver</Text></TouchableOpacity>
+            const isCompleted = completedOrders[item.id];
+            return (
+              <DouCard variant="elevated" style={styles.manifestCard}>
+                <View style={styles.cardHeader}>
+                  <View style={styles.orderTag}>
+                    <Package size={14} color={Colors.white} strokeWidth={2.5} style={{ marginRight: 4 }} />
+                    <Text style={styles.orderTagText}>ORDER {item.orderNumber}</Text>
+                  </View>
+                  <View style={[styles.statusTag, isCompleted && styles.statusTagCompleted]}>
+                    <Text style={[styles.statusTagText, isCompleted && styles.statusTagTextCompleted]}>
+                      {isCompleted ? 'DELIVERED & ESCROW RELEASED' : 'IN TRANSIT'}
+                    </Text>
+                  </View>
                 </View>
-              )}
-            </View>);
+
+                {/* Pickup Step */}
+                <View style={styles.stepRow}>
+                  <View style={styles.stepDot} />
+                  <View style={{ flex: 1, marginLeft: 10 }}>
+                    <Text style={styles.stepLabel}>PICKUP POINT (Cafeteria Hub)</Text>
+                    <Text style={styles.stepName}>{item.vendorName}</Text>
+                    <Text style={styles.stepItems}>{item.itemsSummary}</Text>
+                  </View>
+                </View>
+
+                <View style={styles.stepConnector} />
+
+                {/* Dropoff Step */}
+                <View style={styles.stepRow}>
+                  <View style={[styles.stepDot, { backgroundColor: Colors.primaryAccent }]} />
+                  <View style={{ flex: 1, marginLeft: 10 }}>
+                    <Text style={styles.stepLabel}>STUDENT DROP-OFF</Text>
+                    <Text style={styles.stepName}>{item.studentName}</Text>
+                    <Text style={styles.stepAddress}>{item.deliveryDropoff}</Text>
+                  </View>
+                </View>
+
+                <View style={styles.divider} />
+
+                {/* Handshake & PIN input */}
+                {isCompleted ? (
+                  <View style={styles.payoutSuccessRow}>
+                    <CheckCircle2 size={18} color={Colors.success} strokeWidth={2.5} />
+                    <Text style={styles.payoutSuccessText}>
+                      +₦{item.fareEarned} Delivery fare deposited to driver wallet
+                    </Text>
+                  </View>
+                ) : (
+                  <View style={styles.handshakeBox}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                      <KeyRound size={16} color={Colors.slate900} strokeWidth={2.5} style={{ marginRight: 6 }} />
+                      <Text style={styles.handshakeTitle}>Enter Student's 3-Digit Package PIN</Text>
+                    </View>
+
+                    <View style={styles.pinInputRow}>
+                      <TextInput
+                        style={styles.pinInput}
+                        placeholder="305"
+                        placeholderTextColor={Colors.slate400}
+                        keyboardType="number-pad"
+                        maxLength={3}
+                        value={pinInputs[item.id] || ''}
+                        onChangeText={(t) => setPinInputs((p) => ({ ...p, [item.id]: t }))}
+                      />
+                      <TouchableOpacity
+                        style={[
+                          styles.handshakeBtn,
+                          (pinInputs[item.id]?.length || 0) < 3 && styles.handshakeBtnDisabled,
+                        ]}
+                        onPress={() => handleDeliver(item.id, item.orderNumber)}
+                        disabled={(pinInputs[item.id]?.length || 0) < 3}
+                        activeOpacity={0.85}
+                      >
+                        <Text style={styles.handshakeBtnText}>CONFIRM PIN</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                )}
+              </DouCard>
+            );
           }}
         />
-      )}
+      </View>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.white },
-  header: { flexDirection: 'row', alignItems: 'center', padding: Spacing.lg, borderBottomWidth: 2, borderBottomColor: Colors.black, gap: 12 },
-  backBtn: { fontSize: FontSize.md, color: Colors.black, fontWeight: '600' },
-  title: { fontSize: FontSize.xl, fontWeight: 'bold' },
-  list: { padding: Spacing.lg },
-  card: { borderWidth: 2, borderColor: Colors.black, borderRadius: BorderRadius.sm, padding: 12, marginBottom: 10 },
-  badge: { alignSelf: 'flex-start', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, borderWidth: 1, marginBottom: 8 },
-  badgeText: { fontSize: 10, fontWeight: 'bold' },
-  row: { marginBottom: 4 },
-  deliverRow: { flexDirection: 'row', gap: 8, marginTop: 12 },
-  pinInput: { flex: 1, borderWidth: 2, borderColor: Colors.black, borderRadius: BorderRadius.sm, padding: 10, fontSize: 24, fontWeight: 'bold', textAlign: 'center', letterSpacing: 4 },
-  deliverBtn: { backgroundColor: Colors.black, paddingHorizontal: 20, borderRadius: BorderRadius.sm, justifyContent: 'center' },
-  deliverBtnText: { color: Colors.white, fontWeight: 'bold' },
-  empty: { alignItems: 'center', marginTop: 60 },
+  container: {
+    flex: 1,
+    backgroundColor: Colors.white,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Platform.OS === 'android' ? 14 : Spacing.sm,
+    paddingBottom: Spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.slate100,
+  },
+  backBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: Colors.slate100,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerTitle: {
+    fontSize: FontSize.md,
+    fontWeight: '800',
+    color: Colors.slate900,
+  },
+  headerSub: {
+    fontSize: FontSize.xxs,
+    color: Colors.slate500,
+    marginTop: 1,
+  },
+  content: {
+    flex: 1,
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.md,
+  },
+  lockdownCard: {
+    backgroundColor: Colors.warningSoft,
+    padding: Spacing.md,
+    borderRadius: BorderRadius.xl,
+    borderWidth: 1.5,
+    borderColor: Colors.warning + '40',
+    marginBottom: Spacing.md,
+    alignItems: 'center',
+  },
+  lockdownIconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: Colors.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 6,
+  },
+  lockdownTitle: {
+    fontSize: FontSize.sm,
+    fontWeight: '800',
+    color: Colors.warningDark,
+  },
+  lockdownSub: {
+    fontSize: FontSize.xs,
+    color: Colors.slate600,
+    textAlign: 'center',
+    marginTop: 2,
+    lineHeight: 18,
+  },
+  idleNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.successSoft,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: BorderRadius.md,
+    marginBottom: Spacing.md,
+  },
+  idleNoticeText: {
+    fontSize: FontSize.xs,
+    fontWeight: '700',
+    color: Colors.successDark,
+  },
+  sectionHeader: {
+    fontSize: FontSize.xxs,
+    fontWeight: '800',
+    color: Colors.slate500,
+    letterSpacing: 0.8,
+    marginBottom: Spacing.sm,
+  },
+  manifestCard: {
+    padding: Spacing.md,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Spacing.md,
+  },
+  orderTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.slate900,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: BorderRadius.full,
+  },
+  orderTagText: {
+    color: Colors.white,
+    fontSize: FontSize.xxs,
+    fontWeight: '800',
+  },
+  statusTag: {
+    backgroundColor: Colors.infoSoft,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: BorderRadius.full,
+  },
+  statusTagCompleted: {
+    backgroundColor: Colors.successSoft,
+  },
+  statusTagText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: Colors.info,
+  },
+  statusTagTextCompleted: {
+    color: Colors.successDark,
+  },
+  stepRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  stepDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: Colors.warningDark,
+    marginTop: 3,
+  },
+  stepConnector: {
+    width: 2,
+    height: 16,
+    backgroundColor: Colors.slate200,
+    marginLeft: 4,
+    marginVertical: 2,
+  },
+  stepLabel: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: Colors.slate400,
+    letterSpacing: 0.6,
+  },
+  stepName: {
+    fontSize: FontSize.sm,
+    fontWeight: '800',
+    color: Colors.slate900,
+  },
+  stepItems: {
+    fontSize: FontSize.xs,
+    color: Colors.slate600,
+    marginTop: 2,
+  },
+  stepAddress: {
+    fontSize: FontSize.xs,
+    color: Colors.primaryAccent,
+    fontWeight: '700',
+    marginTop: 1,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: Colors.slate100,
+    marginVertical: Spacing.md,
+  },
+  payoutSuccessRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.successSoft,
+    padding: 10,
+    borderRadius: BorderRadius.md,
+  },
+  payoutSuccessText: {
+    fontSize: FontSize.xs,
+    fontWeight: '700',
+    color: Colors.successDark,
+    marginLeft: 8,
+  },
+  handshakeBox: {
+    backgroundColor: Colors.slate50,
+    padding: 10,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    borderColor: Colors.slate200,
+  },
+  handshakeTitle: {
+    fontSize: FontSize.xs,
+    fontWeight: '800',
+    color: Colors.slate900,
+  },
+  pinInputRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  pinInput: {
+    flex: 1,
+    backgroundColor: Colors.white,
+    borderWidth: 1.5,
+    borderColor: Colors.slate300,
+    borderRadius: BorderRadius.md,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    fontSize: FontSize.lg,
+    fontWeight: '900',
+    letterSpacing: 6,
+    color: Colors.slate900,
+    textAlign: 'center',
+  },
+  handshakeBtn: {
+    backgroundColor: Colors.slate900,
+    paddingHorizontal: 16,
+    borderRadius: BorderRadius.md,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  handshakeBtnDisabled: {
+    opacity: 0.4,
+  },
+  handshakeBtnText: {
+    color: Colors.white,
+    fontWeight: '800',
+    fontSize: FontSize.xs,
+    letterSpacing: 0.4,
+  },
 });

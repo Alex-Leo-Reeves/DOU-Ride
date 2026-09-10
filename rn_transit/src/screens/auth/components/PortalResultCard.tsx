@@ -1,12 +1,27 @@
 import React from 'react';
 import { View, Text, StyleSheet, Image, TouchableOpacity, ActivityIndicator } from 'react-native';
-import { Colors, FontSize, BorderRadius } from '../../../config/theme';
+import {
+  CheckCircle2,
+  GraduationCap,
+  Building,
+  Mail,
+  User,
+  LogIn,
+  UserPlus,
+  X,
+  Sparkles,
+} from 'lucide-react-native';
+import { Colors, FontSize, BorderRadius, Spacing, Shadows } from '../../../config/theme';
 import type { PortalScrapeResult } from '../PortalVerificationScreen';
+import { DouCard } from '../../../components/DouCard';
 
-function Field({ label, value }: { label: string; value: string }) {
+function Field({ icon: Icon, label, value }: { icon: any; label: string; value: string }) {
   return (
     <View style={styles.fieldRow}>
-      <Text style={styles.fieldLabel}>{label}</Text>
+      <View style={styles.fieldLabelWrap}>
+        <Icon size={14} color={Colors.slate400} />
+        <Text style={styles.fieldLabel}>{label}</Text>
+      </View>
       <Text style={styles.fieldValue}>{value}</Text>
     </View>
   );
@@ -32,83 +47,211 @@ export function PortalResultCard({
   onCancel,
 }: PortalResultCardProps) {
   return (
-    <View style={styles.resultCard}>
-      <Text style={styles.resultTitle}>✅ Profile Found</Text>
+    <DouCard variant="elevated" padding={Spacing.lg} style={styles.resultCard}>
+      {/* Header Badge */}
+      <View style={styles.cardHeader}>
+        <View style={styles.successBadge}>
+          <CheckCircle2 size={16} color={Colors.success} />
+          <Text style={styles.successBadgeText}>DOU Identity Verified</Text>
+        </View>
+        <TouchableOpacity onPress={onCancel} style={styles.closeBtn}>
+          <X size={18} color={Colors.slate400} />
+        </TouchableOpacity>
+      </View>
+
       {result.profileImageBase64 ? (
-        <Image
-          source={{ uri: result.profileImageBase64 }}
-          style={styles.profilePic}
-          resizeMode="cover"
-        />
-      ) : null}
-      <Field label="Name" value={result.fullName} />
-      <Field label="Matric" value={result.matricNumber} />
-      <Field label="Department" value={result.department} />
-      <Field label="Faculty" value={result.faculty} />
-      <Field label="Level" value={result.level || 'N/A'} />
-      {result.email ? <Field label="Email" value={result.email} /> : null}
+        <View style={styles.avatarWrap}>
+          <Image
+            source={{ uri: result.profileImageBase64 }}
+            style={styles.profilePic}
+            resizeMode="cover"
+          />
+        </View>
+      ) : (
+        <View style={styles.avatarPlaceholder}>
+          <User size={32} color={Colors.primary} />
+        </View>
+      )}
+
+      <Text style={styles.studentName}>{result.fullName}</Text>
+      <Text style={styles.studentMatric}>{result.matricNumber}</Text>
+
+      <View style={styles.fieldsContainer}>
+        <Field icon={Building} label="Department" value={result.department} />
+        <Field icon={Building} label="Faculty" value={result.faculty} />
+        <Field icon={GraduationCap} label="Academic Level" value={result.level ? `${result.level} Level` : 'Undergraduate'} />
+        {result.email ? <Field icon={Mail} label="Portal Email" value={result.email} /> : null}
+      </View>
 
       <View style={styles.actionsContainer}>
         {existingUser?.exists ? (
           <>
             <Text style={styles.existingText}>
-              You already have an account ({existingUser.email}). Log in to continue.
+              Account found for {existingUser.email}. Sign in to continue to your transit wallet.
             </Text>
             <TouchableOpacity
               style={[styles.actionBtn, styles.loginBtn]}
               onPress={onLogin}
               disabled={loginLoading}
+              activeOpacity={0.8}
             >
               {loginLoading ? (
                 <ActivityIndicator color={Colors.white} />
               ) : (
-                <Text style={styles.actionBtnText}>Log In</Text>
+                <>
+                  <LogIn size={16} color={Colors.white} />
+                  <Text style={styles.loginBtnText}>Sign In Now</Text>
+                </>
               )}
             </TouchableOpacity>
-            {loginError ? <Text style={styles.errorText}>{loginError}</Text> : null}
           </>
-        ) : existingUser === null ? (
-          <ActivityIndicator color={Colors.black} style={{ margin: 12 }} />
         ) : (
-          <>
-            <Text style={styles.newUserText}>
-              No existing account found. Create one with these details.
-            </Text>
-            <TouchableOpacity
-              style={[styles.actionBtn, styles.createBtn]}
-              onPress={onRegister}
-            >
-              <Text style={styles.actionBtnText}>Create Account</Text>
-            </TouchableOpacity>
-          </>
+          <TouchableOpacity
+            style={[styles.actionBtn, styles.registerBtn]}
+            onPress={onRegister}
+            activeOpacity={0.8}
+          >
+            <UserPlus size={16} color={Colors.white} />
+            <Text style={styles.registerBtnText}>Proceed to Registration</Text>
+          </TouchableOpacity>
         )}
 
-        <TouchableOpacity
-          style={[styles.actionBtn, styles.cancelBtn]}
-          onPress={onCancel}
-        >
-          <Text style={[styles.actionBtnText, styles.cancelBtnText]}>Cancel</Text>
-        </TouchableOpacity>
+        {loginError ? <Text style={styles.errorText}>{loginError}</Text> : null}
       </View>
-    </View>
+    </DouCard>
   );
 }
 
 const styles = StyleSheet.create({
-  resultCard: { margin: 8, padding: 16, backgroundColor: '#e8f5e9', borderRadius: BorderRadius.md, borderWidth: 2, borderColor: Colors.success },
-  resultTitle: { fontSize: FontSize.lg, fontWeight: 'bold', color: Colors.black, marginBottom: 8 },
-  profilePic: { width: 64, height: 64, borderRadius: 32, alignSelf: 'center', marginBottom: 8, borderWidth: 2, borderColor: Colors.black },
-  fieldRow: { flexDirection: 'row', paddingVertical: 2 },
-  fieldLabel: { width: 90, fontSize: FontSize.sm, color: Colors.grey },
-  fieldValue: { flex: 1, fontSize: FontSize.sm, fontWeight: '500', color: Colors.black },
-  actionsContainer: { marginTop: 16, gap: 8 },
-  existingText: { fontSize: FontSize.sm, color: Colors.info, textAlign: 'center', marginBottom: 8 },
-  newUserText: { fontSize: FontSize.sm, color: Colors.grey, textAlign: 'center', marginBottom: 8 },
-  actionBtn: { paddingVertical: 12, borderRadius: BorderRadius.md, alignItems: 'center' },
-  loginBtn: { backgroundColor: Colors.black },
-  createBtn: { backgroundColor: Colors.success },
-  cancelBtn: { backgroundColor: Colors.white, borderWidth: 1.5, borderColor: Colors.grey },
-  actionBtnText: { color: Colors.white, fontSize: FontSize.md, fontWeight: 'bold' },
-  cancelBtnText: { color: Colors.grey },
-  errorText: { color: Colors.error, fontSize: FontSize.sm, textAlign: 'center' },
+  resultCard: {
+    borderRadius: BorderRadius.lg,
+    marginVertical: Spacing.md,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: Spacing.md,
+  },
+  successBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: Colors.success + '15',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: BorderRadius.full,
+  },
+  successBadgeText: {
+    fontSize: FontSize.xs,
+    fontFamily: 'Inter_700Bold',
+    color: Colors.success,
+  },
+  closeBtn: {
+    padding: 4,
+  },
+  avatarWrap: {
+    alignSelf: 'center',
+    marginBottom: Spacing.sm,
+  },
+  profilePic: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    borderWidth: 2,
+    borderColor: Colors.primary,
+  },
+  avatarPlaceholder: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: Colors.primary + '15',
+    alignSelf: 'center',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: Spacing.sm,
+  },
+  studentName: {
+    fontSize: FontSize.base,
+    fontFamily: 'Inter_700Bold',
+    color: Colors.slate900,
+    textAlign: 'center',
+  },
+  studentMatric: {
+    fontSize: FontSize.xs,
+    fontFamily: 'Inter_600SemiBold',
+    color: Colors.primary,
+    textAlign: 'center',
+    marginTop: 2,
+    marginBottom: Spacing.md,
+  },
+  fieldsContainer: {
+    backgroundColor: Colors.slate50,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.sm,
+    gap: 8,
+  },
+  fieldRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  fieldLabelWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  fieldLabel: {
+    fontSize: FontSize.xs,
+    fontFamily: 'Inter_400Regular',
+    color: Colors.slate500,
+  },
+  fieldValue: {
+    fontSize: FontSize.xs,
+    fontFamily: 'Inter_600SemiBold',
+    color: Colors.slate800,
+  },
+  actionsContainer: {
+    marginTop: Spacing.md,
+    gap: Spacing.xs,
+  },
+  existingText: {
+    fontSize: FontSize.xs,
+    fontFamily: 'Inter_400Regular',
+    color: Colors.slate600,
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+  actionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 13,
+    borderRadius: BorderRadius.md,
+    ...Shadows.sm,
+  },
+  loginBtn: {
+    backgroundColor: Colors.primary,
+  },
+  loginBtnText: {
+    fontSize: FontSize.sm,
+    fontFamily: 'Inter_700Bold',
+    color: Colors.white,
+  },
+  registerBtn: {
+    backgroundColor: Colors.primary,
+  },
+  registerBtnText: {
+    fontSize: FontSize.sm,
+    fontFamily: 'Inter_700Bold',
+    color: Colors.white,
+  },
+  errorText: {
+    fontSize: FontSize.xs,
+    fontFamily: 'Inter_500Medium',
+    color: Colors.error,
+    textAlign: 'center',
+    marginTop: 4,
+  },
 });

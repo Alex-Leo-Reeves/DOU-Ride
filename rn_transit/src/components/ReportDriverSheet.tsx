@@ -7,19 +7,31 @@ import {
   Modal,
   StyleSheet,
   Alert,
+  ScrollView,
 } from 'react-native';
-import { Colors, FontSize, BorderRadius, Spacing } from '../config/theme';
+import {
+  AlertTriangle,
+  Users,
+  Gauge,
+  Wrench,
+  Frown,
+  Ticket,
+  KeyRound,
+  ShieldAlert,
+  CheckCircle2,
+} from 'lucide-react-native';
+import { Colors, FontSize, BorderRadius, Spacing, Shadows } from '../config/theme';
 import { api } from '../services/api';
 
 const INCIDENT_TYPES = [
-  { type: 'overloading', label: 'Overloading', icon: '👥' },
-  { type: 'reckless_driving', label: 'Reckless Driving', icon: '🏎️' },
-  { type: 'damaged_vehicle', label: 'Damaged Vehicle', icon: '🔧' },
-  { type: 'unruly_behavior', label: 'Unruly Behavior', icon: '😤' },
-  { type: 'no_ticket', label: 'No Ticket / Fare', icon: '🎫' },
-  { type: 'refused_pin', label: 'Refused Boarding PIN', icon: '🔢' },
-  { type: 'verbal_abuse', label: 'Verbal Abuse', icon: '⚠️' },
-  { type: 'queue_jumping', label: 'Queue Jumping', icon: '🔢' },
+  { type: 'overloading', label: 'Overloading (Too many riders)', icon: Users },
+  { type: 'reckless_driving', label: 'Reckless / Overspeeding', icon: Gauge },
+  { type: 'damaged_vehicle', label: 'Rough / Damaged Keke', icon: Wrench },
+  { type: 'unruly_behavior', label: 'Hostile / Arrogant Attitude', icon: Frown },
+  { type: 'no_ticket', label: 'Refused Fare Structure', icon: Ticket },
+  { type: 'refused_pin', label: 'Refused Boarding PIN', icon: KeyRound },
+  { type: 'verbal_abuse', label: 'Verbal Harassment', icon: AlertTriangle },
+  { type: 'queue_jumping', label: 'Park Queue Violation', icon: ShieldAlert },
 ];
 
 interface ReportDriverSheetProps {
@@ -37,53 +49,83 @@ export function ReportDriverSheet({ visible, onClose, targetId, targetName, toke
   const [submitted, setSubmitted] = useState(false);
 
   const handleSubmit = async () => {
-    if (!selectedType) return;
+    if (!selectedType) {
+      Alert.alert('Selection Required', 'Please choose the violation type to report.');
+      return;
+    }
     setIsSubmitting(true);
-    const res = await api.post('/api/reports/create', {
-      targetId,
-      targetRole: 'driver',
-      incidentType: selectedType,
-      description: description.trim() || undefined,
-    }, token);
+    const res = await api.post(
+      '/api/reports/create',
+      {
+        targetId,
+        targetRole: 'driver',
+        incidentType: selectedType,
+        description: description.trim() || undefined,
+      },
+      token
+    );
     setIsSubmitting(false);
     if (res.error) {
-      Alert.alert('Error', res.error as string);
+      Alert.alert('Report Submission Failed', res.error as string);
     } else {
       setSubmitted(true);
     }
   };
 
+  const handleResetAndClose = () => {
+    setSubmitted(false);
+    setSelectedType(null);
+    setDescription('');
+    onClose();
+  };
+
   return (
-    <Modal visible={visible} animationType="slide" transparent>
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <View style={styles.overlay}>
         <View style={styles.sheet}>
           <View style={styles.handle} />
 
           {submitted ? (
             <View style={styles.submittedContainer}>
-              <Text style={styles.checkIcon}>✅</Text>
-              <Text style={styles.submittedTitle}>Report Submitted</Text>
-              <Text style={styles.submittedText}>Report filed against {targetName}</Text>
-              <TouchableOpacity style={styles.primaryBtn} onPress={onClose}>
-                <Text style={styles.primaryBtnText}>OK</Text>
+              <View style={styles.successIconCircle}>
+                <CheckCircle2 size={42} color={Colors.success} strokeWidth={2.5} />
+              </View>
+              <Text style={styles.submittedTitle}>Report Logged</Text>
+              <Text style={styles.submittedText}>
+                Your report against {targetName} has been immediately transmitted to Dennis Osadebay University Student Affairs.
+              </Text>
+              <TouchableOpacity style={styles.primaryBtn} onPress={handleResetAndClose} activeOpacity={0.85}>
+                <Text style={styles.primaryBtnText}>DISMISS</Text>
               </TouchableOpacity>
             </View>
           ) : (
-            <>
-              <Text style={styles.title}>Report Driver</Text>
-              <Text style={styles.subtitle}>Reporting: {targetName}</Text>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+                <View style={styles.alertIconCircle}>
+                  <AlertTriangle size={20} color={Colors.warningDark} strokeWidth={2.5} />
+                </View>
+                <Text style={styles.title}>File Incident Report</Text>
+              </View>
+              <Text style={styles.subtitle}>Reporting Vehicle / Driver: <Text style={{ fontWeight: '800', color: Colors.slate900 }}>{targetName}</Text></Text>
 
-              <Text style={styles.sectionLabel}>Offense Type</Text>
-              <View style={styles.chipRow}>
+              <Text style={styles.sectionLabel}>Select Operational Offense</Text>
+              <View style={styles.chipGrid}>
                 {INCIDENT_TYPES.map((incident) => {
                   const selected = selectedType === incident.type;
+                  const IconComp = incident.icon;
                   return (
                     <TouchableOpacity
                       key={incident.type}
                       style={[styles.chip, selected && styles.chipActive]}
                       onPress={() => setSelectedType(incident.type)}
+                      activeOpacity={0.8}
                     >
-                      <Text style={styles.chipIcon}>{incident.icon}</Text>
+                      <IconComp
+                        size={16}
+                        color={selected ? Colors.white : Colors.slate700}
+                        strokeWidth={2.2}
+                        style={{ marginRight: 6 }}
+                      />
                       <Text style={[styles.chipLabel, selected && styles.chipLabelActive]}>
                         {incident.label}
                       </Text>
@@ -92,30 +134,33 @@ export function ReportDriverSheet({ visible, onClose, targetId, targetName, toke
                 })}
               </View>
 
+              <Text style={styles.sectionLabel}>Incident Notes / Additional Details</Text>
               <TextInput
                 style={styles.textArea}
                 value={description}
                 onChangeText={setDescription}
-                placeholder="Additional details (optional)"
-                placeholderTextColor={Colors.grey}
+                placeholder="Explain what happened at the park or during the trip..."
+                placeholderTextColor={Colors.slate400}
                 multiline
-                maxLength={200}
+                numberOfLines={3}
+                textAlignVertical="top"
               />
 
               <TouchableOpacity
-                style={[styles.submitBtn, (!selectedType || isSubmitting) && styles.disabledBtn]}
+                style={[styles.primaryBtn, (!selectedType || isSubmitting) && styles.disabledBtn]}
                 onPress={handleSubmit}
                 disabled={!selectedType || isSubmitting}
+                activeOpacity={0.85}
               >
-                <Text style={styles.submitBtnText}>
-                  {isSubmitting ? 'Submitting...' : 'SUBMIT REPORT'}
+                <Text style={styles.primaryBtnText}>
+                  {isSubmitting ? 'TRANSMITTING REPORT...' : 'SUBMIT TO STUDENT AFFAIRS'}
                 </Text>
               </TouchableOpacity>
 
               <TouchableOpacity onPress={onClose} style={styles.cancelBtn}>
                 <Text style={styles.cancelBtnText}>Cancel</Text>
               </TouchableOpacity>
-            </>
+            </ScrollView>
           )}
         </View>
       </View>
@@ -126,75 +171,148 @@ export function ReportDriverSheet({ visible, onClose, targetId, targetName, toke
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    backgroundColor: Colors.black60,
     justifyContent: 'flex-end',
   },
   sheet: {
     backgroundColor: Colors.white,
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    padding: 20,
-    paddingBottom: 32,
+    borderTopLeftRadius: BorderRadius.xxl,
+    borderTopRightRadius: BorderRadius.xxl,
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.md,
+    paddingBottom: 36,
+    maxHeight: '88%',
+    ...Shadows.xl,
   },
   handle: {
-    width: 40,
-    height: 4,
-    backgroundColor: Colors.grey,
-    borderRadius: 2,
+    width: 44,
+    height: 5,
+    backgroundColor: Colors.slate300,
+    borderRadius: BorderRadius.full,
     alignSelf: 'center',
-    marginBottom: 16,
+    marginBottom: Spacing.md,
   },
-  title: { fontSize: 20, fontWeight: 'bold' },
-  subtitle: { fontSize: 14, color: Colors.grey, marginBottom: 16 },
-  sectionLabel: { fontWeight: 'bold', fontSize: 13, marginBottom: 8 },
-  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
+  alertIconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: Colors.warningSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  title: {
+    fontSize: FontSize.xxl,
+    fontWeight: '800',
+    color: Colors.slate900,
+    letterSpacing: -0.5,
+  },
+  subtitle: {
+    fontSize: FontSize.sm,
+    color: Colors.slate500,
+    marginTop: 2,
+    marginBottom: Spacing.lg,
+  },
+  sectionLabel: {
+    fontSize: FontSize.xs,
+    fontWeight: '800',
+    color: Colors.slate700,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+    marginBottom: Spacing.sm,
+    marginTop: 4,
+  },
+  chipGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: Spacing.md,
+  },
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: BorderRadius.sm,
-    backgroundColor: Colors.ultraLightGrey,
-    borderWidth: 1,
-    borderColor: Colors.lightGrey,
+    paddingVertical: 10,
+    backgroundColor: Colors.slate50,
+    borderWidth: 1.5,
+    borderColor: Colors.slate200,
+    borderRadius: BorderRadius.lg,
   },
   chipActive: {
-    backgroundColor: Colors.black,
-    borderColor: Colors.black,
+    backgroundColor: Colors.slate900,
+    borderColor: Colors.slate900,
   },
-  chipIcon: { fontSize: 16, marginRight: 4 },
-  chipLabel: { fontSize: 12, fontWeight: '500', color: Colors.black },
-  chipLabelActive: { color: Colors.white, fontWeight: 'bold' },
+  chipLabel: {
+    fontSize: FontSize.xs,
+    fontWeight: '700',
+    color: Colors.slate700,
+  },
+  chipLabelActive: {
+    color: Colors.white,
+  },
   textArea: {
-    borderWidth: 2,
-    borderColor: Colors.black,
-    borderRadius: BorderRadius.sm,
-    padding: 14,
-    fontSize: FontSize.md,
-    height: 80,
-    textAlignVertical: 'top',
-    color: Colors.black,
-    marginBottom: 16,
+    backgroundColor: Colors.slate50,
+    borderWidth: 1.5,
+    borderColor: Colors.slate200,
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.md,
+    fontSize: FontSize.sm,
+    color: Colors.slate900,
+    minHeight: 80,
+    marginBottom: Spacing.lg,
   },
-  submitBtn: {
-    backgroundColor: Colors.error,
-    paddingVertical: 16,
-    borderRadius: BorderRadius.sm,
-    alignItems: 'center',
-  },
-  disabledBtn: { opacity: 0.6 },
-  submitBtnText: { color: Colors.white, fontWeight: 'bold', fontSize: 16 },
-  cancelBtn: { marginTop: 12, alignItems: 'center' },
-  cancelBtnText: { color: Colors.grey, fontSize: FontSize.md },
-  submittedContainer: { alignItems: 'center', paddingVertical: 24 },
-  checkIcon: { fontSize: 60, marginBottom: 16 },
-  submittedTitle: { fontSize: 20, fontWeight: 'bold' },
-  submittedText: { fontSize: 14, color: Colors.grey, textAlign: 'center', marginBottom: 24 },
   primaryBtn: {
-    backgroundColor: Colors.black,
-    paddingHorizontal: 32,
-    paddingVertical: 12,
-    borderRadius: BorderRadius.sm,
+    backgroundColor: Colors.emergencyRed,
+    paddingVertical: 16,
+    borderRadius: BorderRadius.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...Shadows.md,
   },
-  primaryBtnText: { color: Colors.white, fontWeight: 'bold' },
+  disabledBtn: {
+    opacity: 0.4,
+  },
+  primaryBtnText: {
+    color: Colors.white,
+    fontWeight: '800',
+    fontSize: FontSize.sm,
+    letterSpacing: 0.5,
+  },
+  cancelBtn: {
+    marginTop: Spacing.md,
+    alignItems: 'center',
+    paddingVertical: Spacing.xs,
+  },
+  cancelBtnText: {
+    color: Colors.slate500,
+    fontSize: FontSize.sm,
+    fontWeight: '600',
+  },
+  submittedContainer: {
+    alignItems: 'center',
+    paddingVertical: Spacing.xl,
+  },
+  successIconCircle: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: Colors.successSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: Spacing.md,
+  },
+  submittedTitle: {
+    fontSize: FontSize.xxl,
+    fontWeight: '800',
+    color: Colors.slate900,
+    marginBottom: Spacing.xs,
+  },
+  submittedText: {
+    fontSize: FontSize.sm,
+    color: Colors.slate600,
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: Spacing.xl,
+    paddingHorizontal: Spacing.md,
+  },
 });

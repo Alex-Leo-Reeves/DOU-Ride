@@ -1,268 +1,339 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
   TouchableOpacity,
   SafeAreaView,
   StyleSheet,
-  Alert,
+  Animated,
+  Platform,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import {
+  ScanLine,
+  Car,
+  ShieldCheck,
+  Search,
+  AlertTriangle,
+  Zap,
+  CheckCircle2,
+  XCircle,
+  QrCode,
+} from 'lucide-react-native';
 import { Colors, Spacing, FontSize, BorderRadius, Shadows } from '../../config/theme';
 import { Routes } from '../../config/routes';
 
-/**
- * SecurityScannerScreen - QR code scanner for checking student/driver passes.
- * Simulated scanner UI since bare QR library isn't in the stack.
- * Uses manual entry fallback with a mock scan trigger.
- */
-const SecurityScannerScreen: React.FC = () => {
+export default function SecurityScannerScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<any>>();
-  const [scanning, setScanning] = useState(false);
-  const [scanned, setScanned] = useState(false);
+  const [scanning, setScanning] = useState(true);
 
-  const handleBarCodeScanned = useCallback(
-    (data: string) => {
-      if (scanned) return;
-      setScanned(true);
-      setScanning(false);
+  // Laser scanning animation
+  const laserAnim = useRef(new Animated.Value(0)).current;
 
-      // Navigate to result screen with scanned data
-      navigation.navigate(Routes.securityResult, {
-        scanData: data,
-        timestamp: new Date().toISOString(),
-      });
-    },
-    [scanned, navigation],
-  );
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(laserAnim, {
+          toValue: 220,
+          duration: 1500,
+          useNativeDriver: true,
+        }),
+        Animated.timing(laserAnim, {
+          toValue: 0,
+          duration: 1500,
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
+  }, [laserAnim]);
 
-  // Simulate a successful scan via the mock button
-  const handleStartScanning = () => {
-    setScanning(true);
-    setScanned(false);
+  const handleScanData = (data: any) => {
+    navigation.navigate(Routes.securityResult, {
+      scanData: JSON.stringify(data),
+      timestamp: new Date().toISOString(),
+    });
   };
 
-  const handleMockScan = () => {
-    // Simulate scanning a valid pass
-    const mockData = JSON.stringify({
+  const handleScanCleanDriver = () => {
+    handleScanData({
+      type: 'driver',
+      fleetNumber: '042',
+      plateNumber: 'ASB-492-DT',
+      fullName: 'Sunday Azuka',
+      status: 'cleared',
+      department: 'Campus Transport Union',
+      validUntil: '2026-12-31',
+      profilePic: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300',
+    });
+  };
+
+  const handleScanSuspendedDriver = () => {
+    handleScanData({
+      type: 'driver',
+      fleetNumber: '011',
+      plateNumber: 'DT-882-ASB',
+      fullName: 'Amadi Kalu',
+      status: 'suspended',
+      department: 'Campus Transport Union',
+      validUntil: '2026-12-31',
+      suspensionReason: 'Overloading passengers & aggressive altercation at Main Gate',
+      profilePic: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=300',
+    });
+  };
+
+  const handleScanStudent = () => {
+    handleScanData({
       type: 'student',
       userId: 'STU-2024-0123',
-      fullName: 'John Doe',
-      matricNumber: '2024/12345',
+      fullName: 'Ozegbe Mike',
+      matricNumber: 'DOU/2023/SCI/041',
       department: 'Computer Science',
-      validUntil: '2025-06-30',
+      validUntil: '2026-06-30',
+      status: 'cleared',
     });
-    handleBarCodeScanned(mockData);
-  };
-
-  const handleManualEntry = () => {
-    // Navigate to search student screen
-    navigation.navigate('SearchStudent');
   };
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* Top Gate Info Bar */}
       <View style={styles.header}>
-        <Text style={styles.title}>Pass Scanner</Text>
-        <Text style={styles.subtitle}>Scan student or driver pass</Text>
+        <View style={styles.gateTag}>
+          <ShieldCheck size={16} color={Colors.white} strokeWidth={2.5} />
+          <Text style={styles.gateTagText}>MAIN CAMPUS GATE 1</Text>
+        </View>
+        <Text style={styles.headerTitle}>DOU Security Gate Portal</Text>
+        <Text style={styles.headerSub}>Dennis Osadebay University Campus Security</Text>
       </View>
 
-      {/* Scanner Viewport */}
-      <View style={styles.scannerContainer}>
-        <View style={[styles.scannerFrame, scanning && styles.scannerFrameActive]}>
-          {scanning ? (
-            <View style={styles.scanningView}>
-              <View style={styles.scanLine} />
-              <Text style={styles.scanningText}>Scanning...</Text>
-            </View>
-          ) : (
-            <View style={styles.scannerPlaceholder}>
-              <Text style={styles.scannerIcon}>📷</Text>
-              <Text style={styles.scannerPlaceholderText}>
-                Point camera at QR code
-              </Text>
-            </View>
-          )}
+      {/* Viewport Camera Scanner */}
+      <View style={styles.scannerWrapper}>
+        <View style={styles.viewFinder}>
+          {/* Corner Guides */}
+          <View style={[styles.corner, styles.tl]} />
+          <View style={[styles.corner, styles.tr]} />
+          <View style={[styles.corner, styles.bl]} />
+          <View style={[styles.corner, styles.br]} />
+
+          <Animated.View
+            style={[
+              styles.laserBeam,
+              {
+                transform: [{ translateY: laserAnim }],
+              },
+            ]}
+          />
+
+          <View style={styles.centerTarget}>
+            <QrCode size={64} color="rgba(255,255,255,0.4)" strokeWidth={1.5} />
+            <Text style={styles.centerTargetText}>
+              Point camera at Keke windshield sticker or student ID card
+            </Text>
+          </View>
         </View>
       </View>
 
-      {/* Action Buttons */}
-      <View style={styles.actions}>
-        {!scanning ? (
-          <TouchableOpacity
-            style={[styles.button, styles.primaryButton]}
-            onPress={handleStartScanning}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.primaryButtonText}>Start Scanning</Text>
-          </TouchableOpacity>
-        ) : (
-          <TouchableOpacity
-            style={[styles.button, styles.dangerButton]}
-            onPress={() => setScanning(false)}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.dangerButtonText}>Cancel Scan</Text>
-          </TouchableOpacity>
-        )}
+      {/* Rapid Simulation / Action Bar */}
+      <View style={styles.actionsPanel}>
+        <Text style={styles.panelTitle}>GATE VERIFICATION SIMULATOR</Text>
 
         <TouchableOpacity
-          style={[styles.button, styles.secondaryButton]}
-          onPress={handleMockScan}
-          activeOpacity={0.8}
+          style={[styles.simBtn, { backgroundColor: Colors.success }]}
+          onPress={handleScanCleanDriver}
+          activeOpacity={0.85}
         >
-          <Text style={styles.secondaryButtonText}>Mock Scan (Test)</Text>
+          <CheckCircle2 size={18} color={Colors.white} strokeWidth={2.5} style={{ marginRight: 8 }} />
+          <Text style={styles.simBtnText}>SCAN VALID KEKE (#042 - SUNDAY)</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.button, styles.secondaryButton]}
-          onPress={handleManualEntry}
-          activeOpacity={0.8}
+          style={[styles.simBtn, { backgroundColor: Colors.emergencyRed }]}
+          onPress={handleScanSuspendedDriver}
+          activeOpacity={0.85}
         >
-          <Text style={styles.secondaryButtonText}>Manual Entry</Text>
+          <XCircle size={18} color={Colors.white} strokeWidth={2.5} style={{ marginRight: 8 }} />
+          <Text style={styles.simBtnText}>SCAN SUSPENDED KEKE (#011 - AMADI)</Text>
         </TouchableOpacity>
-      </View>
 
-      {/* Recent Scans Summary */}
-      <View style={styles.recentSection}>
-        <Text style={styles.sectionTitle}>Recent Scans</Text>
-        <View style={styles.emptyState}>
-          <Text style={styles.emptyStateText}>No scans yet today</Text>
+        <View style={styles.secondaryRow}>
+          <TouchableOpacity
+            style={styles.secondaryBtn}
+            onPress={handleScanStudent}
+            activeOpacity={0.8}
+          >
+            <ShieldCheck size={16} color={Colors.primaryAccent} strokeWidth={2.5} style={{ marginRight: 6 }} />
+            <Text style={styles.secondaryBtnText}>Scan Student Pass</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.secondaryBtn}
+            onPress={() => navigation.navigate('SearchStudent')}
+            activeOpacity={0.8}
+          >
+            <Search size={16} color={Colors.slate700} strokeWidth={2.5} style={{ marginRight: 6 }} />
+            <Text style={styles.secondaryBtnText}>Lookup Student ID</Text>
+          </TouchableOpacity>
         </View>
       </View>
     </SafeAreaView>
   );
-};
+}
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.white,
+    backgroundColor: Colors.slate950,
   },
   header: {
     paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.xl,
+    paddingTop: Platform.OS === 'android' ? 24 : Spacing.md,
     paddingBottom: Spacing.md,
-    borderBottomWidth: 2,
-    borderBottomColor: Colors.black,
-  },
-  title: {
-    fontSize: FontSize.xxxl,
-    fontWeight: 'bold',
-    color: Colors.black,
-  },
-  subtitle: {
-    fontSize: FontSize.md,
-    color: Colors.grey,
-    marginTop: Spacing.xs,
-  },
-  scannerContainer: {
-    padding: Spacing.lg,
     alignItems: 'center',
   },
-  scannerFrame: {
-    width: 280,
-    height: 280,
-    borderWidth: 3,
-    borderColor: Colors.black,
-    borderRadius: BorderRadius.lg,
-    backgroundColor: Colors.ultraLightGrey,
+  gateTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.primaryAccent,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: BorderRadius.full,
+    marginBottom: 6,
+  },
+  gateTagText: {
+    color: Colors.white,
+    fontSize: FontSize.xxs,
+    fontWeight: '800',
+    marginLeft: 6,
+    letterSpacing: 0.8,
+  },
+  headerTitle: {
+    fontSize: FontSize.xl,
+    fontWeight: '900',
+    color: Colors.white,
+    letterSpacing: -0.3,
+  },
+  headerSub: {
+    fontSize: FontSize.xxs,
+    color: Colors.slate400,
+    marginTop: 2,
+  },
+  scannerWrapper: {
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    ...Shadows.lg,
-  },
-  scannerFrameActive: {
-    borderColor: Colors.success,
-    backgroundColor: Colors.black8,
-  },
-  scanningView: {
-    alignItems: 'center',
-  },
-  scanLine: {
-    width: 200,
-    height: 3,
-    backgroundColor: Colors.neon,
-    marginBottom: Spacing.md,
-  },
-  scanningText: {
-    fontSize: FontSize.lg,
-    fontWeight: 'bold',
-    color: Colors.success,
-  },
-  scannerPlaceholder: {
-    alignItems: 'center',
-  },
-  scannerIcon: {
-    fontSize: 64,
-    marginBottom: Spacing.md,
-  },
-  scannerPlaceholderText: {
-    fontSize: FontSize.md,
-    color: Colors.grey,
-    textAlign: 'center',
-  },
-  actions: {
     paddingHorizontal: Spacing.lg,
-    gap: Spacing.sm,
   },
-  button: {
-    paddingVertical: Spacing.md,
-    borderRadius: BorderRadius.sm,
+  viewFinder: {
+    width: 270,
+    height: 270,
+    borderRadius: BorderRadius.xxl,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.15)',
+    position: 'relative',
+    overflow: 'hidden',
+    justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 2,
-    borderColor: Colors.black,
   },
-  primaryButton: {
-    backgroundColor: Colors.black,
+  corner: {
+    position: 'absolute',
+    width: 32,
+    height: 32,
+    borderColor: Colors.white,
   },
-  primaryButtonText: {
-    fontSize: FontSize.lg,
-    fontWeight: 'bold',
-    color: Colors.white,
+  tl: {
+    top: 14,
+    left: 14,
+    borderTopWidth: 4,
+    borderLeftWidth: 4,
   },
-  secondaryButton: {
+  tr: {
+    top: 14,
+    right: 14,
+    borderTopWidth: 4,
+    borderRightWidth: 4,
+  },
+  bl: {
+    bottom: 14,
+    left: 14,
+    borderBottomWidth: 4,
+    borderLeftWidth: 4,
+  },
+  br: {
+    bottom: 14,
+    right: 14,
+    borderBottomWidth: 4,
+    borderRightWidth: 4,
+  },
+  laserBeam: {
+    position: 'absolute',
+    top: 25,
+    left: 20,
+    right: 20,
+    height: 3,
+    backgroundColor: Colors.neonYellow,
+    ...Shadows.glowPrimary,
+  },
+  centerTarget: {
+    alignItems: 'center',
+    paddingHorizontal: Spacing.lg,
+  },
+  centerTargetText: {
+    color: Colors.slate400,
+    fontSize: FontSize.xs,
+    textAlign: 'center',
+    marginTop: 12,
+    lineHeight: 18,
+  },
+  actionsPanel: {
     backgroundColor: Colors.white,
-  },
-  secondaryButtonText: {
-    fontSize: FontSize.md,
-    fontWeight: 'bold',
-    color: Colors.black,
-  },
-  dangerButton: {
-    backgroundColor: Colors.error,
-    borderColor: Colors.error,
-  },
-  dangerButtonText: {
-    fontSize: FontSize.lg,
-    fontWeight: 'bold',
-    color: Colors.white,
-  },
-  recentSection: {
-    flex: 1,
+    borderTopLeftRadius: BorderRadius.xxl,
+    borderTopRightRadius: BorderRadius.xxl,
     paddingHorizontal: Spacing.lg,
     paddingTop: Spacing.lg,
+    paddingBottom: Platform.OS === 'ios' ? 36 : Spacing.xl,
+    ...Shadows.xl,
   },
-  sectionTitle: {
-    fontSize: FontSize.xl,
-    fontWeight: 'bold',
-    color: Colors.black,
+  panelTitle: {
+    fontSize: FontSize.xxs,
+    fontWeight: '800',
+    color: Colors.slate500,
+    letterSpacing: 0.8,
+    textAlign: 'center',
     marginBottom: Spacing.md,
   },
-  emptyState: {
-    flex: 1,
-    justifyContent: 'center',
+  simBtn: {
+    flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 2,
-    borderColor: Colors.lightGrey,
-    borderRadius: BorderRadius.md,
-    borderStyle: 'dashed',
-    marginBottom: Spacing.lg,
+    justifyContent: 'center',
+    paddingVertical: 15,
+    borderRadius: BorderRadius.lg,
+    marginBottom: Spacing.sm,
+    ...Shadows.sm,
   },
-  emptyStateText: {
-    fontSize: FontSize.md,
-    color: Colors.grey,
+  simBtnText: {
+    color: Colors.white,
+    fontSize: FontSize.xs,
+    fontWeight: '800',
+    letterSpacing: 0.4,
+  },
+  secondaryRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 4,
+  },
+  secondaryBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.slate100,
+    paddingVertical: 12,
+    borderRadius: BorderRadius.md,
+  },
+  secondaryBtnText: {
+    fontSize: FontSize.xs,
+    fontWeight: '700',
+    color: Colors.slate800,
   },
 });
-
-export default SecurityScannerScreen;

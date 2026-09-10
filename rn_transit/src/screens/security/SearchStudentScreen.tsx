@@ -8,54 +8,60 @@ import {
   FlatList,
   StyleSheet,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import {
+  Search,
+  ChevronLeft,
+  User,
+  GraduationCap,
+  AlertTriangle,
+  CheckCircle2,
+  ArrowRight,
+  ShieldCheck,
+  Building2,
+} from 'lucide-react-native';
 import { Colors, Spacing, FontSize, BorderRadius, Shadows } from '../../config/theme';
 import { Routes } from '../../config/routes';
 import { AdminStudent } from '../../types';
+import { DouCard } from '../../components/DouCard';
+import { ReportDriverSheet } from '../../components/ReportDriverSheet';
 
-// Mock student data for search demonstration
 const MOCK_STUDENTS: AdminStudent[] = [
-  { id: '1', name: 'John Doe', matricNumber: '2024/12345', department: 'Computer Science' },
-  { id: '2', name: 'Jane Smith', matricNumber: '2024/12346', department: 'Mathematics' },
-  { id: '3', name: 'Samuel Green', matricNumber: '2024/12347', department: 'Physics' },
-  { id: '4', name: 'Alice Johnson', matricNumber: '2024/12348', department: 'Engineering' },
-  { id: '5', name: 'Bob Williams', matricNumber: '2024/12349', department: 'Medicine' },
-  { id: '6', name: 'Carol Brown', matricNumber: '2024/12350', department: 'Law' },
-  { id: '7', name: 'David Lee', matricNumber: '2024/12351', department: 'Business Admin' },
-  { id: '8', name: 'Eve Davis', matricNumber: '2024/12352', department: 'Arts' },
+  { id: '1', name: 'Ozegbe Mike', matricNumber: 'DOU/2023/SCI/041', department: 'Computer Science' },
+  { id: '2', name: 'Anthonia Okafor', matricNumber: 'DOU/2024/LAW/108', department: 'Faculty of Law' },
+  { id: '3', name: 'Chukwudi Emeka', matricNumber: 'DOU/2022/ENG/019', department: 'Mechanical Engineering' },
+  { id: '4', name: 'Blessing Adeyemi', matricNumber: 'DOU/2024/ARTS/055', department: 'Mass Communication' },
+  { id: '5', name: 'Odaiche Famous', matricNumber: 'DOU/2023/NUR/202', department: 'Nursing Science' },
+  { id: '6', name: 'Favour Nwosu', matricNumber: 'DOU/2024/AGR/012', department: 'Faculty of Agriculture' },
 ];
 
-const SearchStudentScreen: React.FC = () => {
+export default function SearchStudentScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<any>>();
   const [searchQuery, setSearchQuery] = useState('');
-  const [results, setResults] = useState<AdminStudent[]>([]);
-  const [searched, setSearched] = useState(false);
+  const [results, setResults] = useState<AdminStudent[]>(MOCK_STUDENTS);
   const [loading, setLoading] = useState(false);
+  const [reportingStudent, setReportingStudent] = useState<AdminStudent | null>(null);
 
-  const handleSearch = useCallback(() => {
-    if (!searchQuery.trim()) return;
-
-    setLoading(true);
-    setSearched(true);
-
-    // Simulate API search delay
-    setTimeout(() => {
-      const query = searchQuery.trim().toLowerCase();
-      const filtered = MOCK_STUDENTS.filter(
-        (student) =>
-          student.matricNumber.toLowerCase().includes(query) ||
-          student.name.toLowerCase().includes(query) ||
-          student.department.toLowerCase().includes(query),
-      );
-      setResults(filtered);
-      setLoading(false);
-    }, 500);
-  }, [searchQuery]);
+  const handleSearch = useCallback((text: string) => {
+    setSearchQuery(text);
+    if (!text.trim()) {
+      setResults(MOCK_STUDENTS);
+      return;
+    }
+    const q = text.trim().toLowerCase();
+    const filtered = MOCK_STUDENTS.filter(
+      (s) =>
+        s.matricNumber.toLowerCase().includes(q) ||
+        s.name.toLowerCase().includes(q) ||
+        s.department.toLowerCase().includes(q)
+    );
+    setResults(filtered);
+  }, []);
 
   const handleSelectStudent = (student: AdminStudent) => {
-    // Navigate to security result with student data
     navigation.navigate(Routes.securityResult, {
       scanData: JSON.stringify({
         type: 'student',
@@ -63,116 +69,108 @@ const SearchStudentScreen: React.FC = () => {
         fullName: student.name,
         matricNumber: student.matricNumber,
         department: student.department,
-        validUntil: '2025-06-30',
+        validUntil: '2026-12-31',
+        status: 'cleared',
       }),
       timestamp: new Date().toISOString(),
     });
   };
 
-  const handleViewPass = (student: AdminStudent) => {
-    // Quick scan action - same result flow
-    handleSelectStudent(student);
-  };
-
-  const renderStudentItem = ({ item }: { item: AdminStudent }) => (
-    <TouchableOpacity
-      style={styles.studentCard}
-      onPress={() => handleSelectStudent(item)}
-      activeOpacity={0.7}
-    >
-      <View style={styles.studentInfo}>
-        <Text style={styles.studentName}>{item.name}</Text>
-        <Text style={styles.studentMatric}>{item.matricNumber}</Text>
-        <Text style={styles.studentDept}>{item.department}</Text>
-      </View>
-      <TouchableOpacity
-        style={styles.viewPassButton}
-        onPress={() => handleViewPass(item)}
-        activeOpacity={0.7}
-      >
-        <Text style={styles.viewPassButtonText}>View Pass</Text>
-      </TouchableOpacity>
-    </TouchableOpacity>
-  );
-
-  const renderEmptyState = () => (
-    <View style={styles.emptyState}>
-      <Text style={styles.emptyStateIcon}>🔍</Text>
-      {searched ? (
-        <>
-          <Text style={styles.emptyStateTitle}>No Results Found</Text>
-          <Text style={styles.emptyStateText}>
-            No student matches "{searchQuery}".{'\n'}Try a different matric number or name.
-          </Text>
-        </>
-      ) : (
-        <>
-          <Text style={styles.emptyStateTitle}>Search Students</Text>
-          <Text style={styles.emptyStateText}>
-            Enter a matric number or student name to search
-          </Text>
-        </>
-      )}
-    </View>
-  );
-
   return (
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.title}>Search Student</Text>
-        <Text style={styles.subtitle}>Find student by matric number or name</Text>
-      </View>
-
-      {/* Search Bar */}
-      <View style={styles.searchContainer}>
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Enter matric number or name..."
-          placeholderTextColor={Colors.grey}
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          onSubmitEditing={handleSearch}
-          returnKeyType="search"
-          autoCapitalize="none"
-          autoCorrect={false}
-        />
-        <TouchableOpacity
-          style={[styles.searchButton, !searchQuery.trim() && styles.searchButtonDisabled]}
-          onPress={handleSearch}
-          disabled={!searchQuery.trim()}
-          activeOpacity={0.8}
-        >
-          <Text style={styles.searchButtonText}>Search</Text>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn} activeOpacity={0.8}>
+          <ChevronLeft size={22} color={Colors.slate900} strokeWidth={2.5} />
         </TouchableOpacity>
-      </View>
-
-      {/* Quick Guide */}
-      <View style={styles.guideBar}>
-        <Text style={styles.guideText}>
-          Enter full matric number (e.g. 2024/12345) or student name
-        </Text>
-      </View>
-
-      {/* Results */}
-      {loading ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={Colors.black} />
-          <Text style={styles.loadingText}>Searching...</Text>
+        <View style={{ alignItems: 'center' }}>
+          <Text style={styles.headerTitle}>Student ID Lookup</Text>
+          <Text style={styles.headerSub}>Gate Security Registry</Text>
         </View>
-      ) : (
+        <View style={{ width: 38 }} />
+      </View>
+
+      <View style={styles.content}>
+        {/* Search Input */}
+        <View style={styles.searchBar}>
+          <Search size={18} color={Colors.slate400} strokeWidth={2.5} style={{ marginRight: 10 }} />
+          <TextInput
+            style={styles.searchInput}
+            value={searchQuery}
+            onChangeText={handleSearch}
+            placeholder="Search by Matric No (e.g. 2024), Name, or Dept..."
+            placeholderTextColor={Colors.slate400}
+            autoCapitalize="none"
+          />
+        </View>
+
+        <Text style={styles.sectionHeader}>REGISTERED STUDENTS ({results.length})</Text>
+
         <FlatList
           data={results}
           keyExtractor={(item) => item.id}
-          renderItem={renderStudentItem}
-          ListEmptyComponent={renderEmptyState}
-          contentContainerStyle={styles.resultsList}
-          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ gap: 10, paddingBottom: 40 }}
+          ListEmptyComponent={
+            <View style={styles.emptyBox}>
+              <Text style={styles.emptyTitle}>No Matching Students</Text>
+              <Text style={styles.emptySub}>
+                Check the matriculation number or search for full names.
+              </Text>
+            </View>
+          }
+          renderItem={({ item }) => (
+            <DouCard variant="elevated" style={styles.studentCard}>
+              <View style={styles.cardTopRow}>
+                <View style={styles.avatarCircle}>
+                  <User size={20} color={Colors.primaryAccent} strokeWidth={2.5} />
+                </View>
+                <View style={{ flex: 1, marginLeft: 12 }}>
+                  <Text style={styles.studentName}>{item.name}</Text>
+                  <Text style={styles.studentMatric}>{item.matricNumber}</Text>
+                  <Text style={styles.studentDept}>{item.department}</Text>
+                </View>
+                <View style={styles.clearedBadge}>
+                  <Text style={styles.clearedBadgeText}>ENROLLED</Text>
+                </View>
+              </View>
+
+              <View style={styles.cardActions}>
+                <TouchableOpacity
+                  style={styles.inspectBtn}
+                  onPress={() => handleSelectStudent(item)}
+                  activeOpacity={0.8}
+                >
+                  <ShieldCheck size={14} color={Colors.white} strokeWidth={2.5} style={{ marginRight: 6 }} />
+                  <Text style={styles.inspectBtnText}>Gate Clearance</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.reportBtn}
+                  onPress={() => setReportingStudent(item)}
+                  activeOpacity={0.8}
+                >
+                  <AlertTriangle size={14} color={Colors.warningDark} strokeWidth={2.5} style={{ marginRight: 6 }} />
+                  <Text style={styles.reportBtnText}>Report Offense</Text>
+                </TouchableOpacity>
+              </View>
+            </DouCard>
+          )}
+        />
+      </View>
+
+      {/* Incident Report Modal for Gate Security */}
+      {reportingStudent && (
+        <ReportDriverSheet
+          visible={!!reportingStudent}
+          onClose={() => setReportingStudent(null)}
+          targetId={reportingStudent.id}
+          targetName={`${reportingStudent.name} (${reportingStudent.matricNumber})`}
         />
       )}
     </SafeAreaView>
   );
-};
+}
 
 const styles = StyleSheet.create({
   container: {
@@ -180,148 +178,154 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.white,
   },
   header: {
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.xl,
-    paddingBottom: Spacing.md,
-    borderBottomWidth: 2,
-    borderBottomColor: Colors.black,
-  },
-  title: {
-    fontSize: FontSize.xxxl,
-    fontWeight: 'bold',
-    color: Colors.black,
-  },
-  subtitle: {
-    fontSize: FontSize.md,
-    color: Colors.grey,
-    marginTop: Spacing.xs,
-  },
-  searchContainer: {
-    flexDirection: 'row',
-    padding: Spacing.lg,
-    gap: Spacing.sm,
-    borderBottomWidth: 2,
-    borderBottomColor: Colors.black,
-  },
-  searchInput: {
-    flex: 1,
-    borderWidth: 2,
-    borderColor: Colors.black,
-    borderRadius: BorderRadius.sm,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm + 2,
-    fontSize: FontSize.md,
-    color: Colors.black,
-    backgroundColor: Colors.white,
-  },
-  searchButton: {
-    backgroundColor: Colors.black,
-    paddingHorizontal: Spacing.lg,
-    borderRadius: BorderRadius.sm,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: Colors.black,
-  },
-  searchButtonDisabled: {
-    opacity: 0.5,
-  },
-  searchButtonText: {
-    fontSize: FontSize.md,
-    fontWeight: 'bold',
-    color: Colors.white,
-  },
-  guideBar: {
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.sm,
-    backgroundColor: Colors.ultraLightGrey,
-    borderBottomWidth: 2,
-    borderBottomColor: Colors.black,
-  },
-  guideText: {
-    fontSize: FontSize.sm,
-    color: Colors.grey,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    fontSize: FontSize.md,
-    color: Colors.grey,
-    marginTop: Spacing.md,
-  },
-  resultsList: {
-    padding: Spacing.lg,
-    flexGrow: 1,
-  },
-  studentCard: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    borderWidth: 2,
-    borderColor: Colors.black,
-    borderRadius: BorderRadius.sm,
-    padding: Spacing.md,
-    marginBottom: Spacing.sm,
-    backgroundColor: Colors.white,
-    ...Shadows.sm,
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Platform.OS === 'android' ? 14 : Spacing.sm,
+    paddingBottom: Spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.slate100,
   },
-  studentInfo: {
-    flex: 1,
-    marginRight: Spacing.sm,
+  backBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: Colors.slate100,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  studentName: {
-    fontSize: FontSize.lg,
-    fontWeight: 'bold',
-    color: Colors.black,
+  headerTitle: {
+    fontSize: FontSize.md,
+    fontWeight: '800',
+    color: Colors.slate900,
   },
-  studentMatric: {
-    fontSize: FontSize.sm,
-    color: Colors.grey,
-    marginTop: 2,
-  },
-  studentDept: {
-    fontSize: FontSize.sm,
-    color: Colors.grey,
+  headerSub: {
+    fontSize: FontSize.xxs,
+    color: Colors.slate500,
     marginTop: 1,
   },
-  viewPassButton: {
-    borderWidth: 2,
-    borderColor: Colors.black,
-    borderRadius: BorderRadius.sm,
-    paddingVertical: Spacing.sm,
-    paddingHorizontal: Spacing.md,
-    backgroundColor: Colors.white,
-  },
-  viewPassButtonText: {
-    fontSize: FontSize.sm,
-    fontWeight: 'bold',
-    color: Colors.black,
-  },
-  emptyState: {
+  content: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: Spacing.xxl * 2,
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.md,
   },
-  emptyStateIcon: {
-    fontSize: 48,
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.slate50,
+    borderWidth: 1.5,
+    borderColor: Colors.slate200,
+    borderRadius: BorderRadius.xl,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
     marginBottom: Spacing.md,
   },
-  emptyStateTitle: {
-    fontSize: FontSize.xl,
-    fontWeight: 'bold',
-    color: Colors.black,
+  searchInput: {
+    flex: 1,
+    fontSize: FontSize.sm,
+    color: Colors.slate900,
+    fontWeight: '600',
+  },
+  sectionHeader: {
+    fontSize: FontSize.xxs,
+    fontWeight: '800',
+    color: Colors.slate500,
+    letterSpacing: 0.8,
     marginBottom: Spacing.sm,
   },
-  emptyStateText: {
+  studentCard: {
+    padding: Spacing.md,
+  },
+  cardTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  avatarCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: Colors.primarySoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  studentName: {
+    fontSize: FontSize.sm,
+    fontWeight: '800',
+    color: Colors.slate900,
+  },
+  studentMatric: {
+    fontSize: FontSize.xs,
+    fontWeight: '700',
+    color: Colors.primaryAccent,
+    marginTop: 1,
+  },
+  studentDept: {
+    fontSize: FontSize.xxs,
+    color: Colors.slate500,
+    marginTop: 1,
+  },
+  clearedBadge: {
+    backgroundColor: Colors.successSoft,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: BorderRadius.full,
+  },
+  clearedBadgeText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: Colors.successDark,
+  },
+  cardActions: {
+    flexDirection: 'row',
+    gap: 8,
+    borderTopWidth: 1,
+    borderTopColor: Colors.slate100,
+    paddingTop: Spacing.sm,
+    marginTop: Spacing.sm,
+  },
+  inspectBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.slate900,
+    paddingVertical: 10,
+    borderRadius: BorderRadius.md,
+  },
+  inspectBtnText: {
+    color: Colors.white,
+    fontSize: FontSize.xs,
+    fontWeight: '800',
+  },
+  reportBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.warningSoft,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    borderColor: Colors.warning + '40',
+  },
+  reportBtnText: {
+    color: Colors.warningDark,
+    fontSize: FontSize.xs,
+    fontWeight: '700',
+  },
+  emptyBox: {
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+  emptyTitle: {
     fontSize: FontSize.md,
-    color: Colors.grey,
-    textAlign: 'center',
-    lineHeight: 22,
+    fontWeight: '800',
+    color: Colors.slate800,
+  },
+  emptySub: {
+    fontSize: FontSize.xs,
+    color: Colors.slate500,
+    marginTop: 4,
   },
 });
-
-export default SearchStudentScreen;

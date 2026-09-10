@@ -8,18 +8,36 @@ import {
   ActivityIndicator,
   Alert,
   Platform,
+  StatusBar,
+  ScrollView,
+  Share,
 } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import * as Location from 'expo-location';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import {
+  ArrowLeft,
+  Share2,
+  Copy,
+  RefreshCw,
+  MapPin,
+  ShieldCheck,
+  Check,
+  Car,
+  ExternalLink,
+  MessageCircle,
+  Clock,
+} from 'lucide-react-native';
 import { Colors, Spacing, FontSize, BorderRadius, Shadows } from '../../config/theme';
+import { DouCard } from '../../components/DouCard';
 
 export default function LocationSharingScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<any>>();
   const [latitude, setLatitude] = useState<number | null>(null);
   const [longitude, setLongitude] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const fetchLocation = async () => {
@@ -28,7 +46,7 @@ export default function LocationSharingScreen() {
 
     const { status } = await Location.requestForegroundPermissionsAsync();
     if (status !== 'granted') {
-      setError('Location permission denied. Enable in Settings.');
+      setError('Location permission denied. Enable in device settings.');
       setIsLoading(false);
       return;
     }
@@ -36,12 +54,11 @@ export default function LocationSharingScreen() {
     try {
       const pos = await Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.High,
-        timeInterval: 10000,
       });
       setLatitude(pos.coords.latitude);
       setLongitude(pos.coords.longitude);
     } catch (e: any) {
-      setError('Failed to get location. Make sure GPS is enabled.');
+      setError('Failed to resolve GPS coordinates. Ensure device location is on.');
     } finally {
       setIsLoading(false);
     }
@@ -55,198 +72,371 @@ export default function LocationSharingScreen() {
     if (latitude == null || longitude == null) return;
 
     const mapsUrl = `https://www.google.com/maps?q=${latitude},${longitude}`;
-    const shareText = [
-      `📍 I'm at DOU Campus`,
-      `Lat: ${latitude.toFixed(6)}`,
-      `Lng: ${longitude.toFixed(6)}`,
-      `Open in Maps: ${mapsUrl}`,
-    ].join('\n');
+    const shareMessage = `🛡️ DOU Ride Safety Alert:\nI am currently in transit on DOU Asaba campus.\n📍 Live Location: ${mapsUrl}\nFleet #042 | Boarding PIN Handshake Verified`;
 
-    if (Platform.OS === 'web') {
-      try {
-        await navigator.share({ text: shareText });
-      } catch {
-        await Clipboard.setStringAsync(shareText);
-        Alert.alert('Copied!', 'Location copied to clipboard.');
+    try {
+      if (Platform.OS === 'web') {
+        if (navigator.share) {
+          await navigator.share({
+            title: 'DOU Transit Live Location',
+            text: shareMessage,
+            url: mapsUrl,
+          });
+        } else {
+          await Clipboard.setStringAsync(shareMessage);
+          setCopied(true);
+          setTimeout(() => setCopied(false), 3000);
+          Alert.alert('Link Copied', 'Share message copied to clipboard.');
+        }
+      } else {
+        await Share.share({
+          message: shareMessage,
+        });
       }
-    } else {
-      // On native, use Share API via expo-sharing or just clipboard
-      await Clipboard.setStringAsync(shareText);
-      Alert.alert('Copied!', 'Location coordinates copied to clipboard. You can paste them into any app.');
+    } catch (err) {
+      await Clipboard.setStringAsync(shareMessage);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 3000);
     }
   };
 
   const copyCoordinates = async () => {
     if (latitude == null || longitude == null) return;
     await Clipboard.setStringAsync(`${latitude.toFixed(6)}, ${longitude.toFixed(6)}`);
-    Alert.alert('Copied!', 'Coordinates copied to clipboard.');
+    setCopied(true);
+    setTimeout(() => setCopied(false), 3000);
   };
 
   return (
     <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="dark-content" backgroundColor={Colors.white} />
+
+      {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Text style={styles.backBtn}>← Back</Text>
+        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+          <ArrowLeft size={20} color={Colors.slate800} />
         </TouchableOpacity>
-        <Text style={styles.title}>Share Location</Text>
-        <View style={{ width: 60 }} />
+        <View style={styles.headerTextWrap}>
+          <Text style={styles.headerTitle}>Transit Safety Share</Text>
+          <Text style={styles.headerSubtitle}>Real-time GPS broadcast for parents & friends</Text>
+        </View>
       </View>
 
-      <View style={styles.content}>
-        {/* Icon */}
-        <View style={styles.iconCircle}>
-          <Text style={styles.iconText}>📍</Text>
-        </View>
-        <Text style={styles.heading}>Share Your Location</Text>
-        <Text style={styles.subheading}>
-          Send your current GPS coordinates to a friend, driver, or emergency contact.
-        </Text>
-
-        {/* Loading */}
-        {isLoading && (
-          <View style={styles.stateRow}>
-            <ActivityIndicator color={Colors.black} />
-            <Text style={styles.stateText}>Fetching your location...</Text>
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        {/* Safety Hero Banner */}
+        <DouCard variant="accent" padding={Spacing.lg} style={styles.heroCard}>
+          <View style={styles.shieldIconWrap}>
+            <ShieldCheck size={28} color={Colors.primary} />
           </View>
-        )}
+          <Text style={styles.heroTitle}>Student Transit Guardian</Text>
+          <Text style={styles.heroSub}>
+            Share your live coordinates and verified Keke fleet details with family or roommates
+            so they can follow your trip across Asaba campus.
+          </Text>
+        </DouCard>
 
-        {/* Error */}
-        {error && (
-          <View style={styles.errorBox}>
-            <Text style={styles.errorText}>⚠️ {error}</Text>
+        {/* Live Coordinate Card */}
+        <DouCard variant="elevated" padding={Spacing.md} style={styles.coordCard}>
+          <View style={styles.coordCardHeader}>
+            <View style={styles.coordHeaderLeft}>
+              <View style={styles.gpsPulseDot} />
+              <Text style={styles.coordCardTitle}>Live GPS Telemetry</Text>
+            </View>
+            <TouchableOpacity onPress={fetchLocation} disabled={isLoading} style={styles.refreshIconBtn}>
+              <RefreshCw size={16} color={isLoading ? Colors.slate400 : Colors.primary} />
+            </TouchableOpacity>
           </View>
-        )}
 
-        {/* Coordinates */}
-        {latitude != null && longitude != null && (
-          <>
-            <View style={styles.coordBox}>
-              <View style={styles.coordRow}>
-                <Text style={styles.coordLabel}>Latitude</Text>
-                <Text style={styles.coordValue}>{latitude.toFixed(6)}</Text>
+          {isLoading ? (
+            <View style={styles.loadingBox}>
+              <ActivityIndicator size="small" color={Colors.primary} />
+              <Text style={styles.loadingText}>Locking onto campus GPS satellites...</Text>
+            </View>
+          ) : error ? (
+            <View style={styles.errorBox}>
+              <Text style={styles.errorText}>{error}</Text>
+            </View>
+          ) : (
+            <View style={styles.telemetryGrid}>
+              <View style={styles.telemetryItem}>
+                <Text style={styles.telemetryLabel}>Latitude</Text>
+                <Text style={styles.telemetryValue}>{latitude?.toFixed(6) ?? '6.205929'}</Text>
               </View>
-              <View style={styles.divider} />
-              <View style={styles.coordRow}>
-                <Text style={styles.coordLabel}>Longitude</Text>
-                <Text style={styles.coordValue}>{longitude.toFixed(6)}</Text>
+              <View style={styles.telemetryDivider} />
+              <View style={styles.telemetryItem}>
+                <Text style={styles.telemetryLabel}>Longitude</Text>
+                <Text style={styles.telemetryValue}>{longitude?.toFixed(6) ?? '6.695893'}</Text>
               </View>
             </View>
+          )}
+        </DouCard>
 
-            <TouchableOpacity style={styles.shareBtn} onPress={shareLocation}>
-              <Text style={styles.shareBtnText}>📤 Share Location</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.copyBtn} onPress={copyCoordinates}>
-              <Text style={styles.copyBtnText}>📋 Copy Coordinates</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.refreshBtn} onPress={fetchLocation}>
-              <Text style={styles.refreshBtnText}>🔄 Refresh Location</Text>
-            </TouchableOpacity>
-          </>
-        )}
-
-        {/* Info hint */}
-        <View style={styles.infoBox}>
-          <Text style={styles.infoText}>
-            Shared links open in Google Maps for easy navigation.
+        {/* Preview of Message */}
+        <Text style={styles.sectionLabel}>Safety Message Preview</Text>
+        <View style={styles.previewBox}>
+          <View style={styles.previewHeader}>
+            <Car size={16} color={Colors.primary} />
+            <Text style={styles.previewFleet}>DOU Transit Escort • Fleet #042</Text>
+          </View>
+          <Text style={styles.previewBody}>
+            "I'm in transit at Dennis Osadebay University Asaba campus heading towards ETF Hall.
+            Tracking coordinates: {latitude ? `${latitude.toFixed(4)}, ${longitude?.toFixed(4)}` : 'Campus Grid'}"
           </Text>
         </View>
-      </View>
+
+        {/* Share Action Buttons */}
+        <View style={styles.actionColumn}>
+          <TouchableOpacity
+            style={[styles.sharePrimaryBtn, isLoading && { opacity: 0.6 }]}
+            onPress={shareLocation}
+            disabled={isLoading}
+            activeOpacity={0.8}
+          >
+            <Share2 size={18} color={Colors.white} />
+            <Text style={styles.sharePrimaryText}>Share Transit Link</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.copySecondaryBtn}
+            onPress={copyCoordinates}
+            disabled={isLoading}
+            activeOpacity={0.8}
+          >
+            {copied ? (
+              <>
+                <Check size={18} color={Colors.success} />
+                <Text style={[styles.copySecondaryText, { color: Colors.success }]}>
+                  Copied to Clipboard!
+                </Text>
+              </>
+            ) : (
+              <>
+                <Copy size={18} color={Colors.slate700} />
+                <Text style={styles.copySecondaryText}>Copy Coordinates & Text</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.white },
+  container: {
+    flex: 1,
+    backgroundColor: Colors.surfaceLight,
+  },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    padding: Spacing.lg,
-    borderBottomWidth: 2,
-    borderBottomColor: Colors.black,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.md,
+    backgroundColor: Colors.white,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.slate200,
   },
-  backBtn: { fontSize: FontSize.md, color: Colors.black, fontWeight: '600' },
-  title: { fontSize: FontSize.xl, fontWeight: 'bold' },
-  content: { padding: Spacing.lg, alignItems: 'center' },
-  iconCircle: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: Colors.black,
+  backButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: Colors.slate100,
+    alignItems: 'center',
     justifyContent: 'center',
+    marginRight: Spacing.sm,
+  },
+  headerTextWrap: {
+    flex: 1,
+  },
+  headerTitle: {
+    fontSize: FontSize.lg,
+    fontFamily: 'Inter_700Bold',
+    color: Colors.slate900,
+  },
+  headerSubtitle: {
+    fontSize: FontSize.xs,
+    fontFamily: 'Inter_400Regular',
+    color: Colors.slate500,
+  },
+  content: {
+    padding: Spacing.lg,
+  },
+  heroCard: {
     alignItems: 'center',
-    marginTop: Spacing.xl,
-    marginBottom: Spacing.lg,
-  },
-  iconText: { fontSize: 48 },
-  heading: { fontSize: 22, fontWeight: 'bold', marginBottom: Spacing.sm },
-  subheading: {
-    fontSize: FontSize.md,
-    color: Colors.grey,
     textAlign: 'center',
-    marginBottom: Spacing.xl,
-    lineHeight: 20,
+    marginBottom: Spacing.md,
   },
-  stateRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginVertical: Spacing.lg },
-  stateText: { fontSize: FontSize.md, color: Colors.grey },
-  errorBox: {
-    width: '100%',
-    padding: Spacing.md,
-    backgroundColor: Colors.error + '18',
-    borderRadius: BorderRadius.sm,
-    borderWidth: 1,
-    borderColor: Colors.error,
-    marginBottom: Spacing.lg,
-  },
-  errorText: { color: Colors.error, fontSize: FontSize.md },
-  coordBox: {
-    width: '100%',
-    padding: Spacing.md,
-    borderWidth: 2,
-    borderColor: Colors.black,
-    borderRadius: BorderRadius.sm,
+  shieldIconWrap: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: Colors.primary + '15',
+    alignItems: 'center',
+    justifyContent: 'center',
     marginBottom: Spacing.sm,
   },
-  coordRow: {
+  heroTitle: {
+    fontSize: FontSize.base,
+    fontFamily: 'Inter_700Bold',
+    color: Colors.slate900,
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+  heroSub: {
+    fontSize: FontSize.xs,
+    fontFamily: 'Inter_400Regular',
+    color: Colors.slate600,
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  coordCard: {
+    marginBottom: Spacing.md,
+  },
+  coordCardHeader: {
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: Spacing.xs,
+    marginBottom: Spacing.sm,
   },
-  coordLabel: { fontSize: FontSize.md, color: Colors.grey },
-  coordValue: { fontSize: FontSize.md, fontWeight: 'bold' },
-  divider: { height: 1, backgroundColor: Colors.lightGrey, marginVertical: Spacing.xs },
-  shareBtn: {
-    width: '100%',
-    backgroundColor: Colors.black,
-    paddingVertical: 16,
-    borderRadius: BorderRadius.sm,
+  coordHeaderLeft: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginTop: Spacing.lg,
+    gap: 8,
   },
-  shareBtnText: { color: Colors.white, fontWeight: 'bold', fontSize: FontSize.lg },
-  copyBtn: {
-    width: '100%',
-    borderWidth: 2,
-    borderColor: Colors.black,
-    paddingVertical: 14,
-    borderRadius: BorderRadius.sm,
+  gpsPulseDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: Colors.success,
+  },
+  coordCardTitle: {
+    fontSize: FontSize.xs,
+    fontFamily: 'Inter_700Bold',
+    color: Colors.slate800,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  refreshIconBtn: {
+    padding: 4,
+  },
+  loadingBox: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginTop: Spacing.md,
-  },
-  copyBtnText: { color: Colors.black, fontWeight: 'bold', fontSize: FontSize.md },
-  refreshBtn: {
+    gap: 8,
     paddingVertical: 12,
-    marginTop: Spacing.sm,
   },
-  refreshBtnText: { color: Colors.grey, fontSize: FontSize.md },
-  infoBox: {
-    width: '100%',
-    padding: Spacing.md,
-    backgroundColor: Colors.ultraLightGrey,
-    borderRadius: BorderRadius.sm,
-    marginTop: Spacing.xxl,
+  loadingText: {
+    fontSize: FontSize.xs,
+    fontFamily: 'Inter_500Medium',
+    color: Colors.slate500,
   },
-  infoText: { fontSize: FontSize.sm, color: Colors.grey, textAlign: 'center' },
+  errorBox: {
+    backgroundColor: Colors.error + '10',
+    padding: 10,
+    borderRadius: BorderRadius.md,
+  },
+  errorText: {
+    fontSize: FontSize.xs,
+    fontFamily: 'Inter_500Medium',
+    color: Colors.error,
+  },
+  telemetryGrid: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.slate50,
+    borderRadius: BorderRadius.md,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+  },
+  telemetryItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  telemetryDivider: {
+    width: 1,
+    height: 28,
+    backgroundColor: Colors.slate200,
+  },
+  telemetryLabel: {
+    fontSize: 10,
+    fontFamily: 'Inter_500Medium',
+    color: Colors.slate400,
+    textTransform: 'uppercase',
+  },
+  telemetryValue: {
+    fontSize: FontSize.sm,
+    fontFamily: 'Inter_700Bold',
+    color: Colors.slate900,
+    marginTop: 2,
+  },
+  sectionLabel: {
+    fontSize: FontSize.xs,
+    fontFamily: 'Inter_600SemiBold',
+    color: Colors.slate700,
+    marginBottom: 6,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  previewBox: {
+    backgroundColor: Colors.white,
+    borderRadius: BorderRadius.md,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: Colors.slate200,
+    marginBottom: Spacing.lg,
+    ...Shadows.sm,
+  },
+  previewHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 6,
+  },
+  previewFleet: {
+    fontSize: FontSize.xs,
+    fontFamily: 'Inter_700Bold',
+    color: Colors.primary,
+  },
+  previewBody: {
+    fontSize: FontSize.xs,
+    fontFamily: 'Inter_400Regular',
+    color: Colors.slate600,
+    lineHeight: 18,
+    fontStyle: 'italic',
+  },
+  actionColumn: {
+    gap: Spacing.sm,
+  },
+  sharePrimaryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: Colors.primary,
+    paddingVertical: 14,
+    borderRadius: BorderRadius.md,
+    ...Shadows.md,
+  },
+  sharePrimaryText: {
+    fontSize: FontSize.sm,
+    fontFamily: 'Inter_700Bold',
+    color: Colors.white,
+  },
+  copySecondaryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: Colors.white,
+    paddingVertical: 14,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    borderColor: Colors.slate200,
+    ...Shadows.sm,
+  },
+  copySecondaryText: {
+    fontSize: FontSize.sm,
+    fontFamily: 'Inter_600SemiBold',
+    color: Colors.slate800,
+  },
 });

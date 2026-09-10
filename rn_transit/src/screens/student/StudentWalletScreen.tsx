@@ -1,7 +1,32 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, RefreshControl } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  SafeAreaView,
+  ScrollView,
+  TouchableOpacity,
+  RefreshControl,
+  Dimensions,
+  Platform,
+} from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import {
+  ArrowDownLeft,
+  ArrowUpRight,
+  Send,
+  RefreshCw,
+  ChevronLeft,
+  ShieldCheck,
+  CreditCard,
+  Car,
+  Receipt,
+  AlertCircle,
+  Clock,
+  Sparkles,
+  ShoppingBag,
+} from 'lucide-react-native';
 import { Colors, Spacing, FontSize, BorderRadius, Shadows } from '../../config/theme';
 import { useAuthStore } from '../../stores/authStore';
 import { useWalletStore } from '../../stores/walletStore';
@@ -9,159 +34,617 @@ import { DouCard } from '../../components/DouCard';
 import { Transaction } from '../../types';
 import { DepositSheet, WithdrawSheet, TransferSheet } from '../../components/wallet';
 
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
 export default function StudentWalletScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<any>>();
   const { user } = useAuthStore();
-  const { balance, pendingBalance, transactions, isLoading, error, clearError, fetchBalance, deposit, withdraw, transfer } = useWalletStore();
+  const {
+    balance,
+    pendingBalance,
+    transactions,
+    isLoading,
+    error,
+    clearError,
+    fetchBalance,
+    deposit,
+    withdraw,
+    transfer,
+  } = useWalletStore();
 
   const [showDeposit, setShowDeposit] = useState(false);
   const [showWithdraw, setShowWithdraw] = useState(false);
   const [showTransfer, setShowTransfer] = useState(false);
+  const [activeFilter, setActiveFilter] = useState<'all' | 'rides' | 'deposits' | 'transfers'>('all');
 
   const handleFetchBalance = useCallback(() => {
     fetchBalance(user?.userId ?? '', user?.token);
   }, [fetchBalance, user?.userId, user?.token]);
 
-  useEffect(() => { handleFetchBalance(); }, [handleFetchBalance]);
+  useEffect(() => {
+    handleFetchBalance();
+  }, [handleFetchBalance]);
 
-  const txIcon = useCallback((type: string) => {
-    const icons: Record<string, string> = { deposit: '💰', withdrawal: '🏦', ride_payment: '🚗', ride_payout: '💵', refund: '↩️', penalty: '⚠️', platform_fee: '⚙️', transfer_in: '📥', transfer_out: '📤' };
-    return icons[type] ?? '💳';
-  }, []);
+  const handleDepositSubmit = useCallback(
+    async (amount: number) => {
+      const res = await deposit(amount, user?.userId ?? '', user?.token);
+      setShowDeposit(false);
+      return res;
+    },
+    [deposit, user?.userId, user?.token]
+  );
 
-  const txLabel = useCallback((type: string) => {
-    const labels: Record<string, string> = { deposit: 'Deposit', withdrawal: 'Withdrawal', ride_payment: 'Ride Payment', ride_payout: 'Ride Payout', refund: 'Refund', penalty: 'Penalty', platform_fee: 'Platform Fee', transfer_in: 'Transfer In', transfer_out: 'Transfer Out' };
-    return labels[type] ?? type;
-  }, []);
+  const handleWithdrawSubmit = useCallback(
+    async (data: any) => {
+      await withdraw(data, user?.userId ?? '', user?.token);
+      setShowWithdraw(false);
+      return true;
+    },
+    [withdraw, user?.userId, user?.token]
+  );
 
-  const handleDepositSubmit = useCallback(async (amount: number) => {
-    const res = await deposit(amount, user?.userId ?? '', user?.token);
-    setShowDeposit(false);
-    return res;
-  }, [deposit, user?.userId, user?.token]);
+  const handleTransferSubmit = useCallback(
+    async (data: any) => {
+      await transfer(data, user?.userId ?? '', user?.token);
+      setShowTransfer(false);
+      return true;
+    },
+    [transfer, user?.userId, user?.token]
+  );
 
-  const handleWithdrawSubmit = useCallback(async (data: any) => {
-    await withdraw(data, user?.userId ?? '', user?.token);
-    setShowWithdraw(false);
-    return true;
-  }, [withdraw, user?.userId, user?.token]);
-
-  const handleTransferSubmit = useCallback(async (data: any) => {
-    await transfer(data, user?.userId ?? '', user?.token);
-    setShowTransfer(false);
-    return true;
-  }, [transfer, user?.userId, user?.token]);
-
-  const renderedTransactions = useMemo(() => {
-    if (transactions.length === 0) {
-      return <Text style={styles.emptyText}>No transactions yet.{'\n'}Deposit to get started!</Text>;
+  const getTxIcon = (type: string) => {
+    switch (type) {
+      case 'deposit':
+        return <ArrowDownLeft size={18} color={Colors.success} strokeWidth={2.5} />;
+      case 'withdrawal':
+        return <ArrowUpRight size={18} color={Colors.error} strokeWidth={2.5} />;
+      case 'ride_payment':
+        return <Car size={18} color={Colors.primaryAccent} strokeWidth={2.5} />;
+      case 'transfer_in':
+        return <ArrowDownLeft size={18} color={Colors.secondary} strokeWidth={2.5} />;
+      case 'transfer_out':
+        return <Send size={18} color={Colors.secondary} strokeWidth={2.5} />;
+      case 'marketplace_order':
+        return <ShoppingBag size={18} color="#DB2777" strokeWidth={2.5} />;
+      default:
+        return <Receipt size={18} color={Colors.slate600} strokeWidth={2.5} />;
     }
-    return transactions.map((tx: Transaction, idx: number) => (
-      <DouCard key={tx.id || idx} padding={14} style={{ marginBottom: 8 }}>
-        <View style={styles.txRow}>
-          <View style={styles.txIconBox}><Text style={styles.txIcon}>{txIcon(tx.type)}</Text></View>
-          <View style={styles.txInfo}>
-            <View style={styles.txTopRow}>
-              <Text style={styles.txLabel}>{txLabel(tx.type)}</Text>
-              <Text style={[styles.txAmount, { color: tx.type === 'deposit' || tx.type === 'refund' || tx.type === 'transfer_in' || tx.type === 'ride_payout' ? Colors.success : Colors.error }]}>
-                {tx.type === 'deposit' || tx.type === 'refund' || tx.type === 'transfer_in' || tx.type === 'ride_payout' ? '+' : '-'}₦{Math.abs(tx.amount).toFixed(0)}
-              </Text>
-            </View>
-            <View style={styles.txMeta}>
-              {tx.reference && <Text style={styles.txRef}>Ref: {tx.reference.substring(0, 12)}...</Text>}
-              <View style={[styles.statusBadge, { backgroundColor: tx.status === 'completed' ? Colors.success + '20' : Colors.warning + '20' }]}>
-                <Text style={[styles.statusText, { color: tx.status === 'completed' ? Colors.success : Colors.warning }]}>{tx.status === 'completed' ? 'Completed' : tx.status}</Text>
-              </View>
-            </View>
-            {tx.description && <Text style={styles.txDesc}>{tx.description}</Text>}
-          </View>
-        </View>
-      </DouCard>
-    ));
-  }, [transactions, txIcon, txLabel]);
+  };
+
+  const getTxLabel = (type: string) => {
+    switch (type) {
+      case 'deposit':
+        return 'Flutterwave Deposit';
+      case 'withdrawal':
+        return 'Bank / OPay Payout';
+      case 'ride_payment':
+        return 'Keke Transit Fare';
+      case 'ride_payout':
+        return 'Ride Fare Credited';
+      case 'refund':
+        return 'Fare Adjustment Refund';
+      case 'penalty':
+        return 'No-Show Penalty';
+      case 'platform_fee':
+        return 'Gateway Service Fee';
+      case 'transfer_in':
+        return 'P2P Received';
+      case 'transfer_out':
+        return 'P2P Sent';
+      case 'marketplace_order':
+        return 'Cafeteria Order';
+      default:
+        return type.replace('_', ' ').toUpperCase();
+    }
+  };
+
+  const filteredTransactions = useMemo(() => {
+    if (activeFilter === 'all') return transactions;
+    if (activeFilter === 'rides') return transactions.filter((t) => t.type === 'ride_payment');
+    if (activeFilter === 'deposits') return transactions.filter((t) => t.type === 'deposit');
+    if (activeFilter === 'transfers')
+      return transactions.filter((t) => t.type === 'transfer_in' || t.type === 'transfer_out');
+    return transactions;
+  }, [transactions, activeFilter]);
+
+  const formattedBalance = Number(balance || 0).toLocaleString('en-NG', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}><Text style={styles.backBtn}>← Back</Text></TouchableOpacity>
-        <Text style={styles.title}>Wallet</Text>
-        <TouchableOpacity onPress={handleFetchBalance}><Text style={styles.refreshBtn}>🔄</Text></TouchableOpacity>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn} activeOpacity={0.8}>
+          <ChevronLeft size={22} color={Colors.slate900} strokeWidth={2.5} />
+        </TouchableOpacity>
+        <View style={{ alignItems: 'center' }}>
+          <Text style={styles.headerTitle}>Digital Wallet</Text>
+          <Text style={styles.headerSubtitle}>Dennis Osadebay University</Text>
+        </View>
+        <TouchableOpacity onPress={handleFetchBalance} style={styles.refreshBtn} activeOpacity={0.8}>
+          <RefreshCw size={18} color={Colors.slate700} strokeWidth={2.2} />
+        </TouchableOpacity>
       </View>
 
-      <ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={isLoading} onRefresh={handleFetchBalance} />}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={isLoading} onRefresh={handleFetchBalance} />}
+      >
         {error ? (
           <View style={styles.errorBanner}>
+            <AlertCircle size={18} color={Colors.error} strokeWidth={2.5} />
             <Text style={styles.errorText}>{error}</Text>
-            <TouchableOpacity onPress={clearError}><Text style={styles.errorClose}>✕</Text></TouchableOpacity>
+            <TouchableOpacity onPress={clearError} style={{ marginLeft: 8 }}>
+              <Text style={{ fontWeight: '800', color: Colors.error }}>✕</Text>
+            </TouchableOpacity>
           </View>
         ) : null}
 
-        <DouCard padding={24}>
-          <Text style={styles.balanceLabel}>Available Balance</Text>
-          <Text style={styles.balanceAmount}>₦{balance.toFixed(2)}</Text>
-          {pendingBalance > 0 && <Text style={styles.pendingBadge}>₦{pendingBalance.toFixed(2)} pending</Text>}
-        </DouCard>
+        {/* Fintech Virtual Card */}
+        <View style={styles.virtualCard}>
+          <View style={styles.cardTopRow}>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <CreditCard size={18} color={Colors.white} strokeWidth={2.5} style={{ marginRight: 8 }} />
+              <Text style={styles.cardBrand}>DOU TRANSIT PASS</Text>
+            </View>
+            <View style={styles.verifiedBadge}>
+              <ShieldCheck size={12} color={Colors.successDark} strokeWidth={3} />
+              <Text style={styles.verifiedBadgeText}>VERIFIED</Text>
+            </View>
+          </View>
 
-        <View style={styles.actionsRow}>
-          <TouchableOpacity style={styles.actionCard} onPress={() => setShowDeposit(true)}><Text style={styles.actionIcon}>💰</Text><Text style={styles.actionLabel}>Deposit</Text></TouchableOpacity>
-          <TouchableOpacity style={styles.actionCard} onPress={() => setShowWithdraw(true)}><Text style={styles.actionIcon}>🏦</Text><Text style={styles.actionLabel}>Withdraw</Text></TouchableOpacity>
-          <TouchableOpacity style={styles.actionCard} onPress={() => setShowTransfer(true)}><Text style={styles.actionIcon}>📤</Text><Text style={styles.actionLabel}>Transfer</Text></TouchableOpacity>
+          <View style={styles.cardBalanceSection}>
+            <Text style={styles.cardBalanceLabel}>AVAILABLE BALANCE</Text>
+            <Text style={styles.cardBalanceValue}>₦{formattedBalance}</Text>
+          </View>
+
+          {pendingBalance > 0 && (
+            <View style={styles.pendingRow}>
+              <Clock size={12} color={Colors.warningDark} strokeWidth={2.5} />
+              <Text style={styles.pendingText}>
+                ₦{pendingBalance.toLocaleString()} pending settlement
+              </Text>
+            </View>
+          )}
+
+          <View style={styles.cardBottomRow}>
+            <View>
+              <Text style={styles.cardHolderLabel}>STUDENT</Text>
+              <Text style={styles.cardHolderName}>{user?.fullName || 'Student Account'}</Text>
+            </View>
+            <View style={{ alignItems: 'flex-end' }}>
+              <Text style={styles.cardHolderLabel}>MATRIC NO</Text>
+              <Text style={styles.cardHolderMatric}>{(user as any)?.matricNumber || 'DOU/2024/...'}</Text>
+            </View>
+          </View>
         </View>
 
-        <Text style={styles.sectionTitle}>Transaction History</Text>
-        {renderedTransactions}
+        {/* Action Buttons Row */}
+        <View style={styles.actionsRow}>
+          <TouchableOpacity
+            style={styles.actionBtn}
+            onPress={() => setShowDeposit(true)}
+            activeOpacity={0.85}
+          >
+            <View style={[styles.actionIconBox, { backgroundColor: Colors.successSoft }]}>
+              <ArrowDownLeft size={22} color={Colors.successDark} strokeWidth={2.5} />
+            </View>
+            <Text style={styles.actionBtnLabel}>Deposit</Text>
+            <Text style={styles.actionBtnSub}>+₦10 Fee</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.actionBtn}
+            onPress={() => setShowWithdraw(true)}
+            activeOpacity={0.85}
+          >
+            <View style={[styles.actionIconBox, { backgroundColor: Colors.errorSoft }]}>
+              <ArrowUpRight size={22} color={Colors.error} strokeWidth={2.5} />
+            </View>
+            <Text style={styles.actionBtnLabel}>Withdraw</Text>
+            <Text style={styles.actionBtnSub}>OPay / Bank</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.actionBtn}
+            onPress={() => setShowTransfer(true)}
+            activeOpacity={0.85}
+          >
+            <View style={[styles.actionIconBox, { backgroundColor: Colors.secondarySoft }]}>
+              <Send size={20} color={Colors.secondary} strokeWidth={2.5} />
+            </View>
+            <Text style={styles.actionBtnLabel}>Transfer</Text>
+            <Text style={styles.actionBtnSub}>₦0 Free P2P</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Transaction History Filter Chips */}
+        <View style={styles.historyHeader}>
+          <Text style={styles.historyTitle}>TRANSACTION ACTIVITY</Text>
+        </View>
+
+        <View style={styles.filterChipsRow}>
+          {[
+            { id: 'all', label: 'All' },
+            { id: 'rides', label: 'Rides' },
+            { id: 'deposits', label: 'Deposits' },
+            { id: 'transfers', label: 'Transfers' },
+          ].map((f) => {
+            const isSelected = activeFilter === f.id;
+            return (
+              <TouchableOpacity
+                key={f.id}
+                style={[styles.filterChip, isSelected && styles.filterChipActive]}
+                onPress={() => setActiveFilter(f.id as any)}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.filterChipText, isSelected && styles.filterChipTextActive]}>
+                  {f.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        {/* Transaction List */}
+        {filteredTransactions.length === 0 ? (
+          <DouCard variant="flat" style={styles.emptyCard}>
+            <Receipt size={36} color={Colors.slate400} strokeWidth={2} style={{ marginBottom: 8 }} />
+            <Text style={styles.emptyTitle}>No Transactions Found</Text>
+            <Text style={styles.emptySub}>
+              Deposit funds to start taking rides or receiving P2P transfers.
+            </Text>
+          </DouCard>
+        ) : (
+          <View style={styles.txListContainer}>
+            {filteredTransactions.map((tx: Transaction, idx: number) => {
+              const isCredit =
+                tx.type === 'deposit' ||
+                tx.type === 'refund' ||
+                tx.type === 'transfer_in' ||
+                tx.type === 'ride_payout';
+
+              return (
+                <DouCard key={tx.id || idx} variant="default" style={styles.txCard}>
+                  <View style={styles.txRow}>
+                    <View style={[styles.txIconBox, { backgroundColor: isCredit ? Colors.successSoft : Colors.slate100 }]}>
+                      {getTxIcon(tx.type)}
+                    </View>
+
+                    <View style={styles.txInfo}>
+                      <Text style={styles.txLabel}>{getTxLabel(tx.type)}</Text>
+                      <Text style={styles.txMeta}>
+                        {tx.reference ? `Ref: ${tx.reference.substring(0, 10)}...` : 'Campus Settlement'}
+                      </Text>
+                    </View>
+
+                    <View style={styles.txAmountCol}>
+                      <Text style={[styles.txAmountText, { color: isCredit ? Colors.successDark : Colors.slate900 }]}>
+                        {isCredit ? '+' : '-'}₦{Math.abs(tx.amount).toLocaleString()}
+                      </Text>
+                      <View style={[styles.statusBadge, { backgroundColor: tx.status === 'completed' ? Colors.successSoft : Colors.warningSoft }]}>
+                        <Text style={[styles.statusBadgeText, { color: tx.status === 'completed' ? Colors.successDark : Colors.warningDark }]}>
+                          {tx.status === 'completed' ? 'Cleared' : 'Pending'}
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+                </DouCard>
+              );
+            })}
+          </View>
+        )}
       </ScrollView>
 
-      <DepositSheet 
-        visible={showDeposit} 
-        onClose={() => setShowDeposit(false)} 
-        onSubmit={handleDepositSubmit} 
+      {/* Wallet Modals */}
+      <DepositSheet
+        visible={showDeposit}
+        onClose={() => setShowDeposit(false)}
+        onSubmit={handleDepositSubmit}
       />
-
-      <WithdrawSheet 
-        visible={showWithdraw} 
-        onClose={() => setShowWithdraw(false)} 
-        onSubmit={handleWithdrawSubmit} 
+      <WithdrawSheet
+        visible={showWithdraw}
+        onClose={() => setShowWithdraw(false)}
+        onSubmit={handleWithdrawSubmit}
       />
-
-      <TransferSheet 
-        visible={showTransfer} 
-        onClose={() => setShowTransfer(false)} 
-        onSubmit={handleTransferSubmit} 
+      <TransferSheet
+        visible={showTransfer}
+        onClose={() => setShowTransfer(false)}
+        onSubmit={handleTransferSubmit}
       />
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.white },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: Spacing.lg, borderBottomWidth: 2, borderBottomColor: Colors.black },
-  backBtn: { fontSize: FontSize.md, color: Colors.black, fontWeight: '600' },
-  title: { fontSize: FontSize.xl, fontWeight: 'bold', color: Colors.black },
-  refreshBtn: { fontSize: 18 },
-  content: { padding: Spacing.lg },
-  errorBanner: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: Colors.error + '20', padding: 12, borderRadius: BorderRadius.sm, marginBottom: 16 },
-  errorText: { color: Colors.error, flex: 1, marginRight: 8 },
-  errorClose: { color: Colors.error, fontSize: FontSize.lg, fontWeight: 'bold' },
-  balanceLabel: { fontSize: FontSize.md, color: Colors.grey, textAlign: 'center' },
-  balanceAmount: { fontSize: 44, fontWeight: 'bold', textAlign: 'center', marginVertical: 8 },
-  pendingBadge: { textAlign: 'center', color: Colors.warning, fontSize: FontSize.sm, backgroundColor: Colors.warning + '20', paddingVertical: 4, paddingHorizontal: 12, borderRadius: 12, overflow: 'hidden', alignSelf: 'center' },
-  actionsRow: { flexDirection: 'row', gap: 12, marginVertical: 20 },
-  actionCard: { flex: 1, borderWidth: 2, borderColor: Colors.black, borderRadius: BorderRadius.sm, padding: 16, alignItems: 'center', ...Shadows.sm },
-  actionIcon: { fontSize: 28 },
-  actionLabel: { fontWeight: 'bold', fontSize: FontSize.sm, marginTop: 4 },
-  sectionTitle: { fontSize: FontSize.lg, fontWeight: 'bold', marginBottom: 12 },
-  emptyText: { textAlign: 'center', color: Colors.grey, fontSize: FontSize.md, marginVertical: 32, lineHeight: 22 },
-  txRow: { flexDirection: 'row' },
-  txIconBox: { width: 44, height: 44, borderWidth: 2, borderColor: Colors.black, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
-  txIcon: { fontSize: 20 },
-  txInfo: { flex: 1, marginLeft: 14 },
-  txTopRow: { flexDirection: 'row', justifyContent: 'space-between' },
-  txLabel: { fontWeight: 'bold', fontSize: FontSize.md },
-  txAmount: { fontWeight: 'bold', fontSize: FontSize.lg },
-  txMeta: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 },
-  txRef: { fontSize: 11, color: Colors.grey },
-  statusBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
-  statusText: { fontSize: 10, fontWeight: 'bold' },
-  txDesc: { fontSize: 11, color: Colors.grey, marginTop: 2 },
+  container: {
+    flex: 1,
+    backgroundColor: Colors.white,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Platform.OS === 'android' ? 14 : Spacing.sm,
+    paddingBottom: Spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.slate100,
+  },
+  backBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: Colors.slate100,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  refreshBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: Colors.slate100,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerTitle: {
+    fontSize: FontSize.lg,
+    fontWeight: '800',
+    color: Colors.slate900,
+  },
+  headerSubtitle: {
+    fontSize: FontSize.xxs,
+    fontWeight: '600',
+    color: Colors.slate500,
+    marginTop: 1,
+  },
+  content: {
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.md,
+    paddingBottom: Spacing.xxl,
+  },
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.errorSoft,
+    padding: Spacing.md,
+    borderRadius: BorderRadius.lg,
+    marginBottom: Spacing.md,
+  },
+  errorText: {
+    flex: 1,
+    fontSize: FontSize.xs,
+    color: Colors.errorDark,
+    marginLeft: 8,
+    fontWeight: '600',
+  },
+  virtualCard: {
+    backgroundColor: Colors.slate900,
+    borderRadius: BorderRadius.xxl,
+    padding: Spacing.lg,
+    marginBottom: Spacing.lg,
+    ...Shadows.lg,
+  },
+  cardTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Spacing.lg,
+  },
+  cardBrand: {
+    fontSize: FontSize.xs,
+    fontWeight: '800',
+    color: Colors.white,
+    letterSpacing: 1.2,
+  },
+  verifiedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.successSoft,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: BorderRadius.full,
+  },
+  verifiedBadgeText: {
+    fontSize: FontSize.xxs,
+    fontWeight: '800',
+    color: Colors.successDark,
+    marginLeft: 4,
+    letterSpacing: 0.5,
+  },
+  cardBalanceSection: {
+    marginBottom: Spacing.lg,
+  },
+  cardBalanceLabel: {
+    fontSize: FontSize.xxs,
+    fontWeight: '700',
+    color: Colors.slate400,
+    letterSpacing: 1,
+  },
+  cardBalanceValue: {
+    fontSize: 38,
+    fontWeight: '900',
+    color: Colors.white,
+    letterSpacing: -1,
+    marginTop: 2,
+  },
+  pendingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: BorderRadius.md,
+    marginBottom: Spacing.md,
+    alignSelf: 'flex-start',
+  },
+  pendingText: {
+    fontSize: FontSize.xxs,
+    fontWeight: '700',
+    color: Colors.warning,
+    marginLeft: 5,
+  },
+  cardBottomRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.1)',
+    paddingTop: Spacing.md,
+  },
+  cardHolderLabel: {
+    fontSize: FontSize.xxs,
+    fontWeight: '700',
+    color: Colors.slate400,
+    letterSpacing: 0.5,
+  },
+  cardHolderName: {
+    fontSize: FontSize.sm,
+    fontWeight: '800',
+    color: Colors.white,
+    marginTop: 2,
+  },
+  cardHolderMatric: {
+    fontSize: FontSize.sm,
+    fontWeight: '700',
+    color: Colors.slate300,
+    marginTop: 2,
+  },
+  actionsRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: Spacing.lg,
+  },
+  actionBtn: {
+    flex: 1,
+    backgroundColor: Colors.white,
+    borderWidth: 1.5,
+    borderColor: Colors.slate200,
+    borderRadius: BorderRadius.xl,
+    paddingVertical: Spacing.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...Shadows.subtle,
+  },
+  actionIconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 6,
+  },
+  actionBtnLabel: {
+    fontSize: FontSize.sm,
+    fontWeight: '800',
+    color: Colors.slate900,
+  },
+  actionBtnSub: {
+    fontSize: FontSize.xxs,
+    color: Colors.slate500,
+    marginTop: 1,
+    fontWeight: '600',
+  },
+  historyHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Spacing.xs,
+  },
+  historyTitle: {
+    fontSize: FontSize.xxs,
+    fontWeight: '800',
+    color: Colors.slate500,
+    letterSpacing: 0.8,
+  },
+  filterChipsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: Spacing.md,
+  },
+  filterChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: BorderRadius.full,
+    backgroundColor: Colors.slate100,
+  },
+  filterChipActive: {
+    backgroundColor: Colors.slate900,
+  },
+  filterChipText: {
+    fontSize: FontSize.xs,
+    fontWeight: '700',
+    color: Colors.slate600,
+  },
+  filterChipTextActive: {
+    color: Colors.white,
+  },
+  emptyCard: {
+    padding: Spacing.xl,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyTitle: {
+    fontSize: FontSize.md,
+    fontWeight: '800',
+    color: Colors.slate800,
+  },
+  emptySub: {
+    fontSize: FontSize.xs,
+    color: Colors.slate500,
+    textAlign: 'center',
+    marginTop: 4,
+    paddingHorizontal: Spacing.md,
+  },
+  txListContainer: {
+    gap: 8,
+  },
+  txCard: {
+    padding: 12,
+  },
+  txRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  txIconBox: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  txInfo: {
+    flex: 1,
+  },
+  txLabel: {
+    fontSize: FontSize.sm,
+    fontWeight: '700',
+    color: Colors.slate900,
+  },
+  txMeta: {
+    fontSize: FontSize.xxs,
+    color: Colors.slate500,
+    marginTop: 2,
+  },
+  txAmountCol: {
+    alignItems: 'flex-end',
+  },
+  txAmountText: {
+    fontSize: FontSize.md,
+    fontWeight: '800',
+    letterSpacing: -0.2,
+  },
+  statusBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: BorderRadius.full,
+    marginTop: 3,
+  },
+  statusBadgeText: {
+    fontSize: 9,
+    fontWeight: '800',
+  },
 });

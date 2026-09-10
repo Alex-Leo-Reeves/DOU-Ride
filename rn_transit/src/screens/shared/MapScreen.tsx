@@ -5,14 +5,24 @@ import {
   TouchableOpacity,
   SafeAreaView,
   StyleSheet,
+  StatusBar,
 } from 'react-native';
 import MapView from '../../components/map/MapView';
 import type { MapRegion, MarkerData } from '../../components/map/types';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { Colors, Spacing, FontSize, BorderRadius } from '../../config/theme';
+import {
+  ArrowLeft,
+  MapPin,
+  Clock,
+  Compass,
+  Navigation,
+  Layers,
+} from 'lucide-react-native';
+import { Colors, Spacing, FontSize, BorderRadius, Shadows } from '../../config/theme';
 import { API } from '../../config/api';
 import { useLandmarkStore } from '../../stores/landmarkStore';
+import { DouCard } from '../../components/DouCard';
 
 interface MapPoint {
   latitude: number;
@@ -32,19 +42,10 @@ interface MapScreenProps {
 }
 
 const TYPE_COLORS: Record<string, string> = {
-  pickup: Colors.info,
-  destination: Colors.error,
+  pickup: Colors.secondary,
+  destination: Colors.primary,
   driver: Colors.success,
-  landmark: Colors.black,
-};
-
-const LANDMARK_TYPE_COLORS: Record<string, string> = {
-  destination: Colors.error,
-  pickup_zone: Colors.info,
-  vendor: Colors.warning,
-  medical_center: Colors.error,
-  park: Colors.success,
-  gate: Colors.grey,
+  landmark: Colors.slate700,
 };
 
 export default function MapScreen({
@@ -64,54 +65,55 @@ export default function MapScreen({
     }
     return d;
   });
-  const [durationMin] = useState(() => Math.round((distanceKm / 30) * 60));
+  const [durationMin] = useState(() => Math.max(1, Math.round((distanceKm / 25) * 60)));
 
-  // Fetch campus landmarks from the backend
   const { landmarks, fetchLandmarks } = useLandmarkStore();
   useEffect(() => {
     fetchLandmarks();
   }, []);
 
-  // Merge external markers with backend landmarks
   const mapMarkers: MarkerData[] = [
-    // Explicitly passed markers (pickup, destination, driver)
     ...(externalMarkers ?? []).map(
       (m): MarkerData => ({
         latitude: m.latitude,
         longitude: m.longitude,
         title: m.label ?? '',
-        pinColor: TYPE_COLORS[m.type ?? 'landmark'] ?? Colors.black,
-      }),
+        pinColor: TYPE_COLORS[m.type ?? 'landmark'] ?? Colors.primary,
+      })
     ),
-    // Campus landmarks from the database
     ...landmarks.map(
       (lm): MarkerData => ({
         id: lm.id,
         latitude: lm.latitude,
         longitude: lm.longitude,
         title: lm.displayName,
-        description: `📍 ${lm.landmarkType.replace(/_/g, ' ')}`,
-        pinColor: LANDMARK_TYPE_COLORS[lm.landmarkType] || Colors.black,
-      }),
+        description: lm.landmarkType.replace(/_/g, ' '),
+        pinColor: Colors.primary,
+      })
     ),
   ];
 
   const region: MapRegion = {
     latitude: initialCenter?.latitude ?? API.campusCenterLat,
     longitude: initialCenter?.longitude ?? API.campusCenterLng,
-    latitudeDelta: 0.02,
-    longitudeDelta: 0.02,
+    latitudeDelta: 0.015,
+    longitudeDelta: 0.015,
   };
 
   return (
     <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="dark-content" backgroundColor={Colors.white} />
+
+      {/* Header */}
       {interactive && (
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()}>
-            <Text style={styles.backBtn}>← Back</Text>
+          <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+            <ArrowLeft size={20} color={Colors.slate800} />
           </TouchableOpacity>
-          <Text style={styles.title}>{destinationName ?? 'Map'}</Text>
-          <View style={{ width: 50 }} />
+          <View style={styles.headerTextWrap}>
+            <Text style={styles.headerTitle}>{destinationName ?? 'Campus Geographic Map'}</Text>
+            <Text style={styles.headerSubtitle}>Dennis Osadebay University • Asaba</Text>
+          </View>
         </View>
       )}
 
@@ -125,15 +127,26 @@ export default function MapScreen({
           interactive={interactive}
         />
 
+        {/* Floating Route Overview Pill */}
         {routePoints.length >= 2 && (
-          <View style={styles.routeInfo}>
-            <Text style={styles.routeInfoText}>
-              📍 {distanceKm.toFixed(1)} km · 🕐 {durationMin} min
-            </Text>
-            {destinationName && (
-              <Text style={styles.routeInfoDest}>→ {destinationName}</Text>
-            )}
-          </View>
+          <DouCard variant="elevated" padding={Spacing.sm} style={styles.routeFloatingCard}>
+            <View style={styles.routeFloatingRow}>
+              <View style={styles.navIconWrap}>
+                <Navigation size={16} color={Colors.primary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.routeFloatingTitle}>
+                  {destinationName ?? 'Campus Destination'}
+                </Text>
+                <View style={styles.metricsRow}>
+                  <Text style={styles.metricsValue}>{distanceKm.toFixed(1)} km</Text>
+                  <Text style={styles.metricsDot}>•</Text>
+                  <Clock size={11} color={Colors.slate500} />
+                  <Text style={styles.metricsValue}>~{durationMin} min ride</Text>
+                </View>
+              </View>
+            </View>
+          </DouCard>
         )}
       </View>
     </SafeAreaView>
@@ -142,7 +155,7 @@ export default function MapScreen({
 
 function haversine(
   a: { latitude: number; longitude: number },
-  b: { latitude: number; longitude: number },
+  b: { latitude: number; longitude: number }
 ): number {
   const R = 6371;
   const dLat = ((b.latitude - a.latitude) * Math.PI) / 180;
@@ -151,38 +164,90 @@ function haversine(
   const lat2 = (b.latitude * Math.PI) / 180;
   const sinDLat = Math.sin(dLat / 2);
   const sinDLng = Math.sin(dLng / 2);
-  const h =
-    sinDLat * sinDLat + Math.cos(lat1) * Math.cos(lat2) * sinDLng * sinDLng;
+  const h = sinDLat * sinDLat + Math.cos(lat1) * Math.cos(lat2) * sinDLng * sinDLng;
   return R * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.white },
+  container: {
+    flex: 1,
+    backgroundColor: Colors.white,
+  },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    padding: Spacing.lg,
-    borderBottomWidth: 2,
-    borderBottomColor: Colors.black,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.md,
+    backgroundColor: Colors.white,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.slate200,
+    zIndex: 10,
   },
-  backBtn: { fontSize: FontSize.md, color: Colors.black, fontWeight: '600' },
-  title: { fontSize: FontSize.xl, fontWeight: 'bold' },
-  mapContainer: { flex: 1, position: 'relative' },
-  routeInfo: {
+  backButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: Colors.slate100,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: Spacing.sm,
+  },
+  headerTextWrap: {
+    flex: 1,
+  },
+  headerTitle: {
+    fontSize: FontSize.lg,
+    fontFamily: 'Inter_700Bold',
+    color: Colors.slate900,
+  },
+  headerSubtitle: {
+    fontSize: FontSize.xs,
+    fontFamily: 'Inter_400Regular',
+    color: Colors.slate500,
+  },
+  mapContainer: {
+    flex: 1,
+    position: 'relative',
+  },
+  routeFloatingCard: {
     position: 'absolute',
-    top: 12,
+    top: 14,
     left: 16,
     right: 16,
-    backgroundColor: Colors.white + 'EC',
-    borderWidth: 2,
-    borderColor: Colors.black,
-    borderRadius: BorderRadius.sm,
-    padding: Spacing.sm,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.95)',
+    ...Shadows.md,
   },
-  routeInfoText: { fontSize: FontSize.sm, fontWeight: 'bold' },
-  routeInfoDest: { fontSize: FontSize.sm, color: Colors.grey },
+  routeFloatingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  navIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: Colors.primary + '15',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  routeFloatingTitle: {
+    fontSize: FontSize.sm,
+    fontFamily: 'Inter_700Bold',
+    color: Colors.slate900,
+  },
+  metricsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 2,
+  },
+  metricsValue: {
+    fontSize: FontSize.xs,
+    fontFamily: 'Inter_600SemiBold',
+    color: Colors.slate600,
+  },
+  metricsDot: {
+    color: Colors.slate400,
+    fontSize: 10,
+  },
 });

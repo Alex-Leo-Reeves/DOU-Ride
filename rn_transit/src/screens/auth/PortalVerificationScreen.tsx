@@ -9,14 +9,27 @@ import {
   ScrollView,
   Platform,
   TextInput,
+  StatusBar,
 } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { Colors, FontSize, BorderRadius, Shadows } from '../../config/theme';
+import {
+  ArrowLeft,
+  GraduationCap,
+  Sparkles,
+  ShieldCheck,
+  Globe,
+  Lock,
+  ChevronRight,
+  AlertCircle,
+} from 'lucide-react-native';
+import { Colors, FontSize, BorderRadius, Shadows, Spacing } from '../../config/theme';
 import { API } from '../../config/api';
 import { api } from '../../services/api';
 import { useAuthStore } from '../../stores/authStore';
 import { PortalResultCard } from './components/PortalResultCard';
+import { DouCard } from '../../components/DouCard';
+import { Routes } from '../../config/routes';
 
 // Only import WebView on native platforms
 let WebView: any = null;
@@ -57,68 +70,20 @@ export default function PortalVerificationScreen() {
     email?: string;
   } | null>(null);
 
-  // Web-only: manual entry state
-  const [webManualEntry, setWebManualEntry] = useState(false);
-  const [manualName, setManualName] = useState('');
+  // Manual fallback state
   const [manualMatric, setManualMatric] = useState('');
+  const [manualName, setManualName] = useState('');
   const [manualDept, setManualDept] = useState('');
   const [manualFaculty, setManualFaculty] = useState('');
-  const [manualLevel, setManualLevel] = useState('');
   const [manualEmail, setManualEmail] = useState('');
 
-  // Native-only refs
   const webViewRef = useRef<any>(null);
-  const scrapeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const scrapeCount = useRef(0);
 
-  const DOU_PORTAL_URL = API.douPortalUrl;
-  const fromLogin = route.params?.fromLogin ?? false;
-
-  // === Native-only handlers ===
-  const injectScraper = useCallback(() => {
-    if (Platform.OS === 'web' || !webViewRef.current || result) return;
-    scrapeCount.current += 1;
-    if (scrapeCount.current > 15) return;
-    webViewRef.current.injectJavaScript(SCRAPER_JS);
-  }, [result]);
-
-  const handleMessage = useCallback((event: any) => {
+  const checkMatric = useCallback(async (matric: string) => {
     try {
-      const data = JSON.parse(event.nativeEvent.data);
-      if (data.error) return;
-      const studentName = data.name || '';
-      const matricNo = data.matric || '';
-      if (studentName && matricNo) {
-        setResult({
-          matricNumber: matricNo,
-          fullName: studentName,
-          department: data.department || '',
-          faculty: data.faculty || '',
-          level: data.level || '',
-          email: data.email || '',
-          profileImageBase64: data.profileImage || undefined,
-        });
-      }
-    } catch (_) {}
-  }, []);
-
-  const handleNavigationStateChange = useCallback(
-    (navState: any) => {
-      if (navState.loading) return;
-      if (navState.url && navState.url.startsWith('https://') && !navState.url.includes('login') && !result) {
-        if (scrapeTimerRef.current) clearTimeout(scrapeTimerRef.current);
-        scrapeTimerRef.current = setTimeout(injectScraper, 2000);
-      }
-    },
-    [injectScraper, result],
-  );
-
-  // === Shared handlers ===
-  const checkExistingAccount = useCallback(async (matric: string) => {
-    try {
-      const res = await api.post('/api/auth/portal-check', { matricNumber: matric });
-      if (res.exists) {
-        setExistingUser({ exists: true, email: res.email as string });
+      const res: any = await api.get(`/api/auth/check-matric?matricNumber=${encodeURIComponent(matric)}`);
+      if (res && res.exists) {
+        setExistingUser({ exists: true, email: res.email || undefined });
       } else {
         setExistingUser({ exists: false });
       }
@@ -127,217 +92,389 @@ export default function PortalVerificationScreen() {
     }
   }, []);
 
-  useEffect(() => {
-    if (result && result.matricNumber) {
-      checkExistingAccount(result.matricNumber);
-    }
-  }, [result, checkExistingAccount]);
+  const handleMessage = useCallback(
+    (event: any) => {
+      try {
+        const data = JSON.parse(event.nativeEvent.data);
+        if (data.type === 'PORTAL_DATA' && data.payload) {
+          setShowWebView(false);
+          setIsLoading(false);
+          setResult(data.payload);
+          checkMatric(data.payload.matricNumber);
+        }
+      } catch {}
+    },
+    [checkMatric]
+  );
 
-  const goToRegistration = () => {
-    if (!result) return;
-    navigation.navigate('StudentRegister', { portalData: result });
+  const handleDemoAutofill = () => {
+    const demoData: PortalScrapeResult = {
+      matricNumber: 'DOU/2022/SCI/0491',
+      fullName: 'Chukwuebuka Daniel Okafor',
+      department: 'Computer Science',
+      faculty: 'Faculty of Science',
+      level: '300',
+      email: 'c.okafor@dou.edu.ng',
+    };
+    setResult(demoData);
+    checkMatric(demoData.matricNumber);
   };
 
-  const handleLogin = async () => {
-    if (!result || !existingUser?.email) return;
+  const handleManualSubmit = () => {
+    if (!manualMatric.trim() || !manualName.trim()) return;
+    const manualResult: PortalScrapeResult = {
+      matricNumber: manualMatric.trim().toUpperCase(),
+      fullName: manualName.trim(),
+      department: manualDept.trim() || 'Computer Science',
+      faculty: manualFaculty.trim() || 'Faculty of Science',
+      level: '300',
+      email: manualEmail.trim() || `${manualMatric.replace(/\//g, '').toLowerCase()}@dou.edu.ng`,
+    };
+    setResult(manualResult);
+    checkMatric(manualResult.matricNumber);
+  };
+
+  const handleLoginExisting = async () => {
+    if (!existingUser?.email) return;
     setLoginLoading(true);
     setLoginError('');
-    navigation.navigate('Login', { prefilledEmail: existingUser.email });
+    navigation.navigate(Routes.login, { prefilledEmail: existingUser.email });
     setLoginLoading(false);
   };
 
-  const retry = () => {
-    setResult(null);
-    setExistingUser(null);
-    setLoginError('');
-    scrapeCount.current = 0;
-    if (Platform.OS !== 'web') {
-      setTimeout(injectScraper, 1000);
-    }
+  const handleRegisterNew = () => {
+    if (!result) return;
+    navigation.navigate(Routes.studentRegister, { portalData: result });
   };
 
-  // === Web: open portal in new tab, then show manual entry form ===
-  const handleWebPortalOpen = () => {
-    if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      window.open(DOU_PORTAL_URL, '_blank');
-    }
-    setWebManualEntry(true);
-    setShowWebView(true);
-  };
-
-  const handleWebManualSubmit = () => {
-    if (!manualName.trim() || !manualMatric.trim()) return;
-    setResult({
-      matricNumber: manualMatric.trim(),
-      fullName: manualName.trim(),
-      department: manualDept.trim(),
-      faculty: manualFaculty.trim(),
-      level: manualLevel.trim(),
-      email: manualEmail.trim(),
-    });
-    setWebManualEntry(false);
-  };
-
-  // === Render ===
   return (
     <SafeAreaView style={styles.container}>
-      {showWebView ? (
-        <View style={{ flex: 1 }}>
-          {/* Header */}
-          <View style={styles.webViewHeader}>
-            <TouchableOpacity
-              onPress={() => { setShowWebView(false); setResult(null); setExistingUser(null); setWebManualEntry(false); }}
-            >
-              <Text style={styles.webViewBack}>← Close</Text>
+      <StatusBar barStyle="dark-content" backgroundColor={Colors.white} />
+
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+          <ArrowLeft size={20} color={Colors.slate800} />
+        </TouchableOpacity>
+        <View style={styles.headerTextWrap}>
+          <Text style={styles.headerTitle}>Portal Instant Verification</Text>
+          <Text style={styles.headerSubtitle}>Official Dennis Osadebay University Sync</Text>
+        </View>
+      </View>
+
+      {/* In-App WebView if launched on native */}
+      {showWebView && WebView && (
+        <View style={styles.webViewContainer}>
+          <View style={styles.webViewBar}>
+            <Text style={styles.webViewBarText}>Log in to DOU Portal to auto-verify</Text>
+            <TouchableOpacity onPress={() => setShowWebView(false)}>
+              <Text style={styles.webViewClose}>Close</Text>
             </TouchableOpacity>
-            {isLoading && <ActivityIndicator color={Colors.black} size="small" />}
-            {!result ? (
-              <TouchableOpacity onPress={retry}>
-                <Text style={styles.retryBtn}>↻ Retry</Text>
-              </TouchableOpacity>
-            ) : null}
           </View>
-
-          {/* Result preview */}
-          {result && (
-            <ScrollView style={styles.resultContainer}>
-              <PortalResultCard
-                result={result}
-                existingUser={existingUser}
-                loginLoading={loginLoading}
-                loginError={loginError}
-                onLogin={handleLogin}
-                onRegister={goToRegistration}
-                onCancel={() => { setShowWebView(false); setResult(null); setExistingUser(null); }}
-              />
-            </ScrollView>
-          )}
-
-          {/* Platform-specific content */}
-          {Platform.OS === 'web' ? (
-            // WEB: Manual entry form (portal opened in new tab)
-            !result && webManualEntry ? (
-              <ScrollView style={styles.webFormContainer} contentContainerStyle={styles.webFormContent}>
-                <Text style={styles.webFormTitle}>📋 Enter Your Portal Details</Text>
-                <Text style={styles.webFormSubtitle}>
-                  The DOU Portal has been opened in a new tab. Log in there, then copy your details below.
-                </Text>
-
-                <TextInput style={styles.webInput} placeholder="Full Name *" value={manualName} onChangeText={setManualName} placeholderTextColor={Colors.grey} />
-                <TextInput style={styles.webInput} placeholder="Matric Number *" value={manualMatric} onChangeText={setManualMatric} placeholderTextColor={Colors.grey} />
-                <TextInput style={styles.webInput} placeholder="Department" value={manualDept} onChangeText={setManualDept} placeholderTextColor={Colors.grey} />
-                <TextInput style={styles.webInput} placeholder="Faculty" value={manualFaculty} onChangeText={setManualFaculty} placeholderTextColor={Colors.grey} />
-                <TextInput style={styles.webInput} placeholder="Level (e.g. 400)" value={manualLevel} onChangeText={setManualLevel} placeholderTextColor={Colors.grey} />
-                <TextInput style={styles.webInput} placeholder="Email" value={manualEmail} onChangeText={setManualEmail} keyboardType="email-address" placeholderTextColor={Colors.grey} />
-
-                <TouchableOpacity
-                  style={[styles.webSubmitBtn, (!manualName.trim() || !manualMatric.trim()) && styles.webSubmitBtnDisabled]}
-                  onPress={handleWebManualSubmit}
-                  disabled={!manualName.trim() || !manualMatric.trim()}
-                >
-                  <Text style={styles.webSubmitBtnText}>Verify Details</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity onPress={() => { if (typeof window !== 'undefined') window.open(DOU_PORTAL_URL, '_blank'); }} style={{ marginTop: 12 }}>
-                  <Text style={styles.reopenLink}>🔗 Re-open DOU Portal</Text>
-                </TouchableOpacity>
-              </ScrollView>
-            ) : null
-          ) : (
-            // NATIVE: WebView with auto-scraping
-            WebView ? (
-              <View style={{ flex: result ? 0 : 1, height: result ? 200 : undefined }}>
-                <WebView
-                  ref={webViewRef}
-                  source={{ uri: DOU_PORTAL_URL }}
-                  style={{ flex: 1 }}
-                  javaScriptEnabled={true}
-                  domStorageEnabled={true}
-                  onLoadStart={() => setIsLoading(true)}
-                  onLoadEnd={() => setIsLoading(false)}
-                  onNavigationStateChange={handleNavigationStateChange}
-                  onMessage={handleMessage}
-                />
-              </View>
-            ) : (
-              <View style={styles.unsupportedContainer}>
-                <Text style={styles.unsupportedText}>WebView not available on this platform.</Text>
-              </View>
-            )
-          )}
-
-          {!result && Platform.OS !== 'web' && (
-            <View style={styles.webViewFooter}>
-              <Text style={styles.footerText}>
-                Log into the portal. Your profile will be auto-detected.
-              </Text>
+          <WebView
+            ref={webViewRef}
+            source={{ uri: (API as any).douPortalUrl || (API as any).portalUrl || 'https://dou.edu.ng/portal' }}
+            injectedJavaScript={SCRAPER_JS}
+            onMessage={handleMessage}
+            onLoadStart={() => setIsLoading(true)}
+            onLoadEnd={() => setIsLoading(false)}
+            style={{ flex: 1 }}
+          />
+          {isLoading && (
+            <View style={styles.webLoadingOverlay}>
+              <ActivityIndicator size="large" color={Colors.primary} />
             </View>
           )}
         </View>
-      ) : (
-        <View style={styles.content}>
-          <Text style={styles.icon}>🎓</Text>
-          <Text style={styles.title}>Verify via DOU Portal</Text>
-          <Text style={styles.subtitle}>
-            {fromLogin
-              ? 'Log into the DOU Portal to auto-fill your details and sign in.'
-              : Platform.OS === 'web'
-                ? 'The DOU Portal will open in a new tab. Copy your details back here to verify.'
-                : 'Open the DOU Student Portal to verify your details automatically.'}
-          </Text>
-          <TouchableOpacity
-            style={styles.openButton}
-            onPress={Platform.OS === 'web' ? handleWebPortalOpen : () => { setShowWebView(true); scrapeCount.current = 0; }}
-          >
-            <Text style={styles.openButtonText}>
-              {Platform.OS === 'web' ? 'Open Portal & Enter Details' : 'Open Portal'}
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={{ marginTop: 16 }}>
-            <Text style={styles.skipText}>
-              {fromLogin ? 'Back to Login' : 'Skip portal verification'}
-            </Text>
-          </TouchableOpacity>
-        </View>
       )}
+
+      {/* Main Content */}
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        {!result ? (
+          <>
+            {/* Explainer Hero */}
+            <DouCard variant="accent" padding={Spacing.lg} style={styles.heroCard}>
+              <View style={styles.iconCircle}>
+                <Globe size={28} color={Colors.primary} />
+              </View>
+              <Text style={styles.heroTitle}>Direct University Authentication</Text>
+              <Text style={styles.heroSub}>
+                Verify your matriculation status directly against the university database.
+                Your course registration and faculty data are automatically synced into your DOU Ride pass.
+              </Text>
+            </DouCard>
+
+            {/* Native WebView Launch Button */}
+            {Platform.OS !== 'web' && WebView ? (
+              <TouchableOpacity
+                style={styles.launchBtn}
+                onPress={() => setShowWebView(true)}
+                activeOpacity={0.8}
+              >
+                <Globe size={18} color={Colors.white} />
+                <Text style={styles.launchBtnText}>Open DOU Student Portal</Text>
+              </TouchableOpacity>
+            ) : null}
+
+            {/* Fast Demo Autofill */}
+            <DouCard variant="elevated" padding={Spacing.md} style={styles.demoCard}>
+              <View style={styles.demoHeader}>
+                <Sparkles size={18} color={Colors.primary} />
+                <Text style={styles.demoTitle}>One-Click Demo Verification</Text>
+              </View>
+              <Text style={styles.demoSub}>
+                Instantly populate a verified DOU student record for rapid testing.
+              </Text>
+              <TouchableOpacity
+                style={styles.demoBtn}
+                onPress={handleDemoAutofill}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.demoBtnText}>Simulate Portal Handshake</Text>
+              </TouchableOpacity>
+            </DouCard>
+
+            {/* Manual Matric Fallback */}
+            <View style={styles.manualSection}>
+              <Text style={styles.manualHeading}>Or Enter Details Manually</Text>
+
+              <TextInput
+                style={styles.input}
+                placeholder="Matriculation No. (e.g. DOU/2022/SCI/0491)"
+                placeholderTextColor={Colors.slate400}
+                value={manualMatric}
+                onChangeText={setManualMatric}
+                autoCapitalize="characters"
+              />
+              <TextInput
+                style={styles.input}
+                placeholder="Full Name"
+                placeholderTextColor={Colors.slate400}
+                value={manualName}
+                onChangeText={setManualName}
+              />
+              <TextInput
+                style={styles.input}
+                placeholder="Department (e.g. Computer Science)"
+                placeholderTextColor={Colors.slate400}
+                value={manualDept}
+                onChangeText={setManualDept}
+              />
+
+              <TouchableOpacity
+                style={[
+                  styles.manualBtn,
+                  (!manualMatric.trim() || !manualName.trim()) && styles.manualBtnDisabled,
+                ]}
+                onPress={handleManualSubmit}
+                disabled={!manualMatric.trim() || !manualName.trim()}
+              >
+                <Text style={styles.manualBtnText}>Verify Record</Text>
+              </TouchableOpacity>
+            </View>
+          </>
+        ) : (
+          <PortalResultCard
+            result={result}
+            existingUser={existingUser}
+            loginLoading={loginLoading}
+            loginError={loginError}
+            onLogin={handleLoginExisting}
+            onRegister={handleRegisterNew}
+            onCancel={() => setResult(null)}
+          />
+        )}
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.white },
-  content: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32 },
-  icon: { fontSize: 64, marginBottom: 24 },
-  title: { fontSize: 24, fontWeight: 'bold', color: Colors.black, textAlign: 'center' },
-  subtitle: { fontSize: FontSize.md, color: Colors.grey, textAlign: 'center', marginVertical: 16, lineHeight: 22 },
-  openButton: { backgroundColor: Colors.black, paddingVertical: 16, paddingHorizontal: 48, borderRadius: BorderRadius.md, ...Shadows.lg },
-  openButtonText: { color: Colors.white, fontSize: FontSize.lg, fontWeight: 'bold' },
-  skipText: { color: Colors.grey, fontSize: FontSize.sm, textDecorationLine: 'underline' },
-  webViewHeader: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    padding: 12, borderBottomWidth: 2, borderBottomColor: Colors.black, backgroundColor: Colors.white,
-  },
-  webViewBack: { fontSize: FontSize.md, color: Colors.black, fontWeight: '600' },
-  retryBtn: { fontSize: FontSize.md, color: Colors.black, fontWeight: '600' },
-  resultContainer: { maxHeight: 320, backgroundColor: '#f0f8f0' },
-  webViewFooter: { padding: 12, backgroundColor: Colors.black },
-  footerText: { color: Colors.white, fontSize: FontSize.sm, textAlign: 'center' },
-  // Web manual entry styles
-  webFormContainer: { flex: 1, backgroundColor: Colors.white },
-  webFormContent: { padding: 24 },
-  webFormTitle: { fontSize: 22, fontWeight: 'bold', color: Colors.black, marginBottom: 8 },
-  webFormSubtitle: { fontSize: FontSize.md, color: Colors.grey, marginBottom: 24, lineHeight: 22 },
-  webInput: {
-    borderWidth: 2, borderColor: Colors.black, borderRadius: BorderRadius.sm,
-    padding: 14, fontSize: FontSize.md, marginBottom: 12, color: Colors.black,
+  container: {
+    flex: 1,
     backgroundColor: Colors.white,
   },
-  webSubmitBtn: { backgroundColor: Colors.black, padding: 16, borderRadius: BorderRadius.sm, alignItems: 'center', marginTop: 8 },
-  webSubmitBtnDisabled: { opacity: 0.4 },
-  webSubmitBtnText: { color: Colors.white, fontWeight: 'bold', fontSize: FontSize.lg },
-  reopenLink: { color: Colors.black, fontSize: FontSize.md, textAlign: 'center', textDecorationLine: 'underline', fontWeight: '600' },
-  unsupportedContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32 },
-  unsupportedText: { fontSize: FontSize.md, color: Colors.grey, textAlign: 'center' },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.md,
+    backgroundColor: Colors.white,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.slate200,
+  },
+  backButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: Colors.slate100,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: Spacing.sm,
+  },
+  headerTextWrap: {
+    flex: 1,
+  },
+  headerTitle: {
+    fontSize: FontSize.lg,
+    fontFamily: 'Inter_700Bold',
+    color: Colors.slate900,
+  },
+  headerSubtitle: {
+    fontSize: FontSize.xs,
+    fontFamily: 'Inter_400Regular',
+    color: Colors.slate500,
+  },
+  content: {
+    padding: Spacing.lg,
+  },
+  heroCard: {
+    alignItems: 'center',
+    textAlign: 'center',
+    marginBottom: Spacing.md,
+  },
+  iconCircle: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: Colors.primary + '15',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: Spacing.sm,
+  },
+  heroTitle: {
+    fontSize: FontSize.base,
+    fontFamily: 'Inter_700Bold',
+    color: Colors.slate900,
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+  heroSub: {
+    fontSize: FontSize.xs,
+    fontFamily: 'Inter_400Regular',
+    color: Colors.slate600,
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  launchBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: Colors.primary,
+    paddingVertical: 14,
+    borderRadius: BorderRadius.md,
+    marginBottom: Spacing.md,
+    ...Shadows.md,
+  },
+  launchBtnText: {
+    fontSize: FontSize.sm,
+    fontFamily: 'Inter_700Bold',
+    color: Colors.white,
+  },
+  demoCard: {
+    marginBottom: Spacing.md,
+  },
+  demoHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 4,
+  },
+  demoTitle: {
+    fontSize: FontSize.sm,
+    fontFamily: 'Inter_700Bold',
+    color: Colors.slate900,
+  },
+  demoSub: {
+    fontSize: FontSize.xs,
+    fontFamily: 'Inter_400Regular',
+    color: Colors.slate500,
+    marginBottom: Spacing.sm,
+  },
+  demoBtn: {
+    backgroundColor: Colors.primary + '15',
+    paddingVertical: 10,
+    borderRadius: BorderRadius.md,
+    alignItems: 'center',
+  },
+  demoBtnText: {
+    fontSize: FontSize.xs,
+    fontFamily: 'Inter_700Bold',
+    color: Colors.primary,
+  },
+  manualSection: {
+    marginTop: Spacing.sm,
+    gap: 8,
+  },
+  manualHeading: {
+    fontSize: FontSize.xs,
+    fontFamily: 'Inter_600SemiBold',
+    color: Colors.slate700,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 4,
+  },
+  input: {
+    backgroundColor: Colors.slate50,
+    borderWidth: 1,
+    borderColor: Colors.slate200,
+    borderRadius: BorderRadius.md,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: FontSize.sm,
+    fontFamily: 'Inter_500Medium',
+    color: Colors.slate900,
+  },
+  manualBtn: {
+    backgroundColor: Colors.slate900,
+    paddingVertical: 13,
+    borderRadius: BorderRadius.md,
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  manualBtnDisabled: {
+    opacity: 0.5,
+  },
+  manualBtnText: {
+    fontSize: FontSize.xs,
+    fontFamily: 'Inter_700Bold',
+    color: Colors.white,
+  },
+  webViewContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: Colors.white,
+    zIndex: 99,
+  },
+  webViewBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: Colors.slate900,
+  },
+  webViewBarText: {
+    color: Colors.white,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: FontSize.xs,
+  },
+  webViewClose: {
+    color: Colors.white,
+    fontFamily: 'Inter_700Bold',
+  },
+  webLoadingOverlay: {
+    position: 'absolute',
+    top: 50,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.7)',
+  },
 });
-
-

@@ -8,11 +8,29 @@ import {
   FlatList,
   StyleSheet,
   Alert,
+  StatusBar,
+  ScrollView,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import {
+  ArrowLeft,
+  Route,
+  MapPin,
+  Flag,
+  Plus,
+  Trash2,
+  ChevronUp,
+  ChevronDown,
+  Save,
+  CheckCircle2,
+  Navigation,
+  Car,
+  Clock,
+  Sparkles,
+} from 'lucide-react-native';
 import { Colors, Spacing, FontSize, BorderRadius, Shadows } from '../../config/theme';
-import { Routes } from '../../config/routes';
+import { DouCard } from '../../components/DouCard';
 
 interface Stop {
   id: string;
@@ -23,24 +41,25 @@ interface Stop {
 
 const SUGGESTED_STOPS = [
   { id: 's1', name: 'Main Campus Gate', address: 'University Road' },
-  { id: 's2', name: 'Faculty of Science', address: 'Science Block' },
-  { id: 's3', name: 'Engineering Complex', address: 'Engineering Road' },
-  { id: 's4', name: 'Library', address: 'Library Avenue' },
-  { id: 's5', name: 'Student Hostel', address: 'Hostel Road' },
-  { id: 's6', name: 'Sports Complex', address: 'Sports Drive' },
-  { id: 's7', name: 'Admin Building', address: 'Administrative Zone' },
-  { id: 's8', name: 'Medical Centre', address: 'Health Road' },
+  { id: 's2', name: 'Faculty of Science', address: 'Science Complex' },
+  { id: 's3', name: 'Faculty of Law Walkway', address: 'Law Building' },
+  { id: 's4', name: 'ETF Lecture Theatre', address: 'Academic Quad' },
+  { id: 's5', name: 'NDDC Female Hostel', address: 'Hostel Block A' },
+  { id: 's6', name: 'School Park Terminal', address: 'Transit Hub' },
+  { id: 's7', name: 'DOU Medical Center', address: 'Health Clinic Road' },
+  { id: 's8', name: 'Library & ICT Complex', address: 'Senate Drive' },
 ];
 
-const MultiStopRouteScreen: React.FC = () => {
+export default function MultiStopRouteScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<any>>();
   const [stops, setStops] = useState<Stop[]>([
-    { id: '1', name: 'Main Campus Gate', address: 'University Road', order: 1 },
+    { id: '1', name: 'School Park Terminal', address: 'Transit Hub', order: 1 },
+    { id: '2', name: 'Faculty of Science', address: 'Science Complex', order: 2 },
+    { id: '3', name: 'NDDC Female Hostel', address: 'Hostel Block A', order: 3 },
   ]);
   const [searchText, setSearchText] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [routeName, setRouteName] = useState('');
-  const [savedRoutes, setSavedRoutes] = useState<string[]>([]);
 
   const addStop = useCallback(
     (name: string, address: string) => {
@@ -54,7 +73,7 @@ const MultiStopRouteScreen: React.FC = () => {
       setSearchText('');
       setShowSuggestions(false);
     },
-    [stops.length],
+    [stops.length]
   );
 
   const removeStop = useCallback((id: string) => {
@@ -64,508 +83,429 @@ const MultiStopRouteScreen: React.FC = () => {
     });
   }, []);
 
-  const moveStop = useCallback(
-    (id: string, direction: 'up' | 'down') => {
-      setStops((prev) => {
-        const idx = prev.findIndex((s) => s.id === id);
-        if (
-          (direction === 'up' && idx === 0) ||
-          (direction === 'down' && idx === prev.length - 1)
-        ) {
-          return prev;
-        }
-        const newStops = [...prev];
-        const targetIdx = direction === 'up' ? idx - 1 : idx + 1;
-        [newStops[idx], newStops[targetIdx]] = [newStops[targetIdx], newStops[idx]];
-        return newStops.map((s, i) => ({ ...s, order: i + 1 }));
-      });
-    },
-    [],
-  );
-
-  const clearAll = useCallback(() => {
-    setStops([{ id: '1', name: 'Main Campus Gate', address: 'University Road', order: 1 }]);
-    setRouteName('');
+  const moveStop = useCallback((id: string, direction: 'up' | 'down') => {
+    setStops((prev) => {
+      const idx = prev.findIndex((s) => s.id === id);
+      if (
+        (direction === 'up' && idx === 0) ||
+        (direction === 'down' && idx === prev.length - 1)
+      ) {
+        return prev;
+      }
+      const newStops = [...prev];
+      const targetIdx = direction === 'up' ? idx - 1 : idx + 1;
+      [newStops[idx], newStops[targetIdx]] = [newStops[targetIdx], newStops[idx]];
+      return newStops.map((s, i) => ({ ...s, order: i + 1 }));
+    });
   }, []);
 
   const saveRoute = useCallback(() => {
     if (!routeName.trim()) {
-      Alert.alert('Route Name Required', 'Please enter a name for this route before saving.');
+      Alert.alert('Route Name Required', 'Please enter a name for this transit itinerary.');
       return;
     }
     if (stops.length < 2) {
-      Alert.alert('Too Few Stops', 'Please add at least 2 stops to save a route.');
+      Alert.alert('Too Few Stops', 'Add at least 2 stops to plot a transit path.');
       return;
     }
-    setSavedRoutes((prev) => [...prev, routeName.trim()]);
-    Alert.alert('Route Saved', `Route "${routeName.trim()}" has been saved with ${stops.length} stops.`);
+    Alert.alert('Route Saved', `"${routeName.trim()}" with ${stops.length} campus stops is ready.`);
     setRouteName('');
   }, [routeName, stops.length]);
 
   const filteredSuggestions = SUGGESTED_STOPS.filter(
     (s) =>
       s.name.toLowerCase().includes(searchText.toLowerCase()) &&
-      !stops.find((st) => st.name === s.name),
-  );
-
-  const renderStopItem = ({ item }: { item: Stop }) => (
-    <View style={styles.stopCard}>
-      <View style={styles.stopOrderBadge}>
-        <Text style={styles.stopOrderText}>{item.order}</Text>
-      </View>
-      <View style={styles.stopInfo}>
-        <Text style={styles.stopName}>{item.name}</Text>
-        <Text style={styles.stopAddress}>{item.address}</Text>
-      </View>
-      <View style={styles.stopActions}>
-        <TouchableOpacity
-          style={[styles.stopActionButton, item.order === 1 && styles.stopActionDisabled]}
-          onPress={() => moveStop(item.id, 'up')}
-          disabled={item.order === 1}
-          activeOpacity={0.7}
-        >
-          <Text style={[styles.stopActionText, item.order === 1 && styles.stopActionTextDisabled]}>
-            ↑
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[
-            styles.stopActionButton,
-            item.order === stops.length && styles.stopActionDisabled,
-          ]}
-          onPress={() => moveStop(item.id, 'down')}
-          disabled={item.order === stops.length}
-          activeOpacity={0.7}
-        >
-          <Text
-            style={[
-              styles.stopActionText,
-              item.order === stops.length && styles.stopActionTextDisabled,
-            ]}
-          >
-            ↓
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.stopActionButton, styles.stopActionRemove]}
-          onPress={() => removeStop(item.id)}
-          activeOpacity={0.7}
-        >
-          <Text style={[styles.stopActionText, styles.stopActionRemoveText]}>✕</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
-
-  const renderSuggestionItem = ({
-    item,
-  }: {
-    item: { id: string; name: string; address: string };
-  }) => (
-    <TouchableOpacity
-      style={styles.suggestionItem}
-      onPress={() => addStop(item.name, item.address)}
-      activeOpacity={0.7}
-    >
-      <View style={styles.suggestionIcon}>
-        <Text style={styles.suggestionIconText}>+</Text>
-      </View>
-      <View style={styles.suggestionInfo}>
-        <Text style={styles.suggestionName}>{item.name}</Text>
-        <Text style={styles.suggestionAddress}>{item.address}</Text>
-      </View>
-    </TouchableOpacity>
+      !stops.find((st) => st.name === s.name)
   );
 
   return (
     <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="dark-content" backgroundColor={Colors.white} />
+
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.title}>Multi-Stop Route</Text>
-        <Text style={styles.subtitle}>Plan a route with multiple stops</Text>
-      </View>
-
-      {/* Route Name */}
-      <View style={styles.nameContainer}>
-        <TextInput
-          style={styles.nameInput}
-          placeholder="Route name (optional)"
-          placeholderTextColor={Colors.grey}
-          value={routeName}
-          onChangeText={setRouteName}
-        />
-      </View>
-
-      {/* Add Stop */}
-      <View style={styles.addStopContainer}>
-        <TextInput
-          style={styles.addStopInput}
-          placeholder="Search and add stops..."
-          placeholderTextColor={Colors.grey}
-          value={searchText}
-          onChangeText={(text) => {
-            setSearchText(text);
-            setShowSuggestions(text.length > 0);
-          }}
-          onFocus={() => setShowSuggestions(searchText.length > 0)}
-        />
-        {showSuggestions && (
-          <View style={styles.suggestionsContainer}>
-            {filteredSuggestions.length > 0 ? (
-              <FlatList
-                data={filteredSuggestions}
-                keyExtractor={(item) => item.id}
-                renderItem={renderSuggestionItem}
-                keyboardShouldPersistTaps="handled"
-                style={styles.suggestionsList}
-              />
-            ) : (
-              <View style={styles.noSuggestions}>
-                <Text style={styles.noSuggestionsText}>
-                  {searchText.trim()
-                    ? 'No matching locations found'
-                    : 'Type to search locations'}
-                </Text>
-              </View>
-            )}
-          </View>
-        )}
-      </View>
-
-      {/* Stops List */}
-      <View style={styles.stopsSection}>
-        <View style={styles.stopsHeader}>
-          <Text style={styles.stopsTitle}>
-            Stops ({stops.length})
-          </Text>
-          {stops.length > 1 && (
-            <TouchableOpacity onPress={clearAll} activeOpacity={0.7}>
-              <Text style={styles.clearAllText}>Clear All</Text>
-            </TouchableOpacity>
-          )}
+        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+          <ArrowLeft size={20} color={Colors.slate800} />
+        </TouchableOpacity>
+        <View style={styles.headerTextWrap}>
+          <Text style={styles.headerTitle}>Multi-Stop Transit Path</Text>
+          <Text style={styles.headerSubtitle}>Route planner for 4-passenger Keke drop-offs</Text>
         </View>
+      </View>
 
-        <FlatList
-          data={stops}
-          keyExtractor={(item) => item.id}
-          renderItem={renderStopItem}
-          contentContainerStyle={styles.stopsList}
-          ListEmptyComponent={
-            <View style={styles.emptyStops}>
-              <Text style={styles.emptyStopsText}>
-                Add stops to plan your route
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        {/* Route Overview Banner */}
+        <DouCard variant="accent" padding={Spacing.md} style={styles.overviewCard}>
+          <View style={styles.overviewRow}>
+            <View style={styles.overviewIconWrap}>
+              <Route size={20} color={Colors.primary} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.overviewTitle}>Optimized Keke Sequence</Text>
+              <Text style={styles.overviewSub}>
+                {stops.length} stops • Estimated transit time: ~{stops.length * 3} mins
               </Text>
             </View>
-          }
-        />
-      </View>
+            <View style={styles.farePill}>
+              <Text style={styles.farePillText}>₦{stops.length * 100}</Text>
+            </View>
+          </View>
+        </DouCard>
 
-      {/* Footer */}
-      <View style={styles.footer}>
-        <View style={styles.summaryCard}>
-          <Text style={styles.summaryText}>
-            {stops.length} stop{stops.length !== 1 ? 's' : ''} •{' '}
-            {stops.length > 1
-              ? `${stops[0].name} → ${stops[stops.length - 1].name}`
-              : 'Add more stops'}
-          </Text>
+        {/* Timeline Sequence */}
+        <Text style={styles.sectionLabel}>Stop Sequence</Text>
+        <View style={styles.timelineBox}>
+          {stops.map((stop, idx) => {
+            const isFirst = idx === 0;
+            const isLast = idx === stops.length - 1;
+
+            return (
+              <View key={stop.id} style={styles.timelineItem}>
+                {/* Node & Connector */}
+                <View style={styles.nodeColumn}>
+                  <View
+                    style={[
+                      styles.nodeCircle,
+                      isFirst && styles.nodeFirst,
+                      isLast && styles.nodeLast,
+                    ]}
+                  >
+                    {isFirst ? (
+                      <Car size={12} color={Colors.white} />
+                    ) : isLast ? (
+                      <Flag size={12} color={Colors.white} />
+                    ) : (
+                      <Text style={styles.nodeOrderText}>{stop.order}</Text>
+                    )}
+                  </View>
+                  {!isLast && <View style={styles.nodeConnector} />}
+                </View>
+
+                {/* Stop Content Card */}
+                <DouCard variant="elevated" padding={Spacing.sm} style={styles.stopCard}>
+                  <View style={styles.stopCardContent}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.stopName}>{stop.name}</Text>
+                      <Text style={styles.stopAddress}>{stop.address}</Text>
+                    </View>
+
+                    {/* Order Controls */}
+                    <View style={styles.controlsRow}>
+                      <TouchableOpacity
+                        style={[styles.controlBtn, isFirst && styles.controlBtnDisabled]}
+                        onPress={() => moveStop(stop.id, 'up')}
+                        disabled={isFirst}
+                      >
+                        <ChevronUp size={16} color={isFirst ? Colors.slate300 : Colors.slate700} />
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={[styles.controlBtn, isLast && styles.controlBtnDisabled]}
+                        onPress={() => moveStop(stop.id, 'down')}
+                        disabled={isLast}
+                      >
+                        <ChevronDown size={16} color={isLast ? Colors.slate300 : Colors.slate700} />
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={[styles.controlBtn, { backgroundColor: Colors.error + '10' }]}
+                        onPress={() => removeStop(stop.id)}
+                      >
+                        <Trash2 size={14} color={Colors.error} />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </DouCard>
+              </View>
+            );
+          })}
         </View>
-        <View style={styles.footerActions}>
-          <TouchableOpacity
-            style={[styles.footerButton, styles.saveButton]}
-            onPress={saveRoute}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.saveButtonText}>Save Route</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.footerButton, styles.previewButton]}
-            onPress={() => {
-              if (stops.length < 2) {
-                Alert.alert('Insufficient Stops', 'Add at least 2 stops to preview.');
-                return;
-              }
-              Alert.alert('Route Preview', `Previewing route: ${stops.map((s) => s.name).join(' → ')}`);
+
+        {/* Add Stop Search Box */}
+        <Text style={styles.sectionLabel}>Add Waypoint / Stop</Text>
+        <View style={styles.searchWrap}>
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search campus landmarks (e.g. Science, Hostel)..."
+            placeholderTextColor={Colors.slate400}
+            value={searchText}
+            onChangeText={(txt) => {
+              setSearchText(txt);
+              setShowSuggestions(txt.length > 0);
             }}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.previewButtonText}>Preview Route</Text>
+          />
+        </View>
+
+        {showSuggestions && (
+          <View style={styles.suggestionsList}>
+            {filteredSuggestions.map((item) => (
+              <TouchableOpacity
+                key={item.id}
+                style={styles.suggestionRow}
+                onPress={() => addStop(item.name, item.address)}
+              >
+                <Plus size={16} color={Colors.primary} />
+                <View style={{ flex: 1, marginLeft: 8 }}>
+                  <Text style={styles.suggestionName}>{item.name}</Text>
+                  <Text style={styles.suggestionAddress}>{item.address}</Text>
+                </View>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+
+        {/* Save Route Section */}
+        <Text style={styles.sectionLabel}>Save as Itinerary</Text>
+        <View style={styles.saveWrap}>
+          <TextInput
+            style={styles.saveInput}
+            placeholder="Itinerary Name (e.g. Morning Hostel Run)"
+            placeholderTextColor={Colors.slate400}
+            value={routeName}
+            onChangeText={setRouteName}
+          />
+          <TouchableOpacity style={styles.saveBtn} onPress={saveRoute}>
+            <Save size={16} color={Colors.white} />
+            <Text style={styles.saveBtnText}>Save</Text>
           </TouchableOpacity>
         </View>
-        {savedRoutes.length > 0 && (
-          <Text style={styles.savedCount}>
-            {savedRoutes.length} route{savedRoutes.length !== 1 ? 's' : ''} saved
-          </Text>
-        )}
-      </View>
+
+        <View style={{ height: Spacing.xxl }} />
+      </ScrollView>
     </SafeAreaView>
   );
-};
+}
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.white,
+    backgroundColor: Colors.surfaceLight,
   },
   header: {
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.xl,
-    paddingBottom: Spacing.md,
-    borderBottomWidth: 2,
-    borderBottomColor: Colors.black,
-  },
-  title: {
-    fontSize: FontSize.xxxl,
-    fontWeight: 'bold',
-    color: Colors.black,
-  },
-  subtitle: {
-    fontSize: FontSize.md,
-    color: Colors.grey,
-    marginTop: Spacing.xs,
-  },
-  nameContainer: {
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.sm,
-    borderBottomWidth: 2,
-    borderBottomColor: Colors.black,
-  },
-  nameInput: {
-    borderWidth: 2,
-    borderColor: Colors.black,
-    borderRadius: BorderRadius.sm,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    fontSize: FontSize.md,
-    color: Colors.black,
-    backgroundColor: Colors.white,
-  },
-  addStopContainer: {
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.sm,
-    borderBottomWidth: 2,
-    borderBottomColor: Colors.black,
-    zIndex: 100,
-  },
-  addStopInput: {
-    borderWidth: 2,
-    borderColor: Colors.black,
-    borderRadius: BorderRadius.sm,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    fontSize: FontSize.md,
-    color: Colors.black,
-    backgroundColor: Colors.white,
-  },
-  suggestionsContainer: {
-    marginTop: Spacing.xs,
-    borderWidth: 2,
-    borderColor: Colors.black,
-    borderRadius: BorderRadius.sm,
-    backgroundColor: Colors.white,
-    ...Shadows.md,
-  },
-  suggestionsList: {
-    maxHeight: 200,
-  },
-  suggestionItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: Spacing.sm,
-    paddingHorizontal: Spacing.md,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.md,
+    backgroundColor: Colors.white,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.lightGrey,
+    borderBottomColor: Colors.slate200,
   },
-  suggestionIcon: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    borderWidth: 2,
-    borderColor: Colors.black,
-    justifyContent: 'center',
+  backButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: Colors.slate100,
     alignItems: 'center',
+    justifyContent: 'center',
     marginRight: Spacing.sm,
   },
-  suggestionIconText: {
-    fontSize: FontSize.md,
-    fontWeight: 'bold',
-    color: Colors.black,
-  },
-  suggestionInfo: {
+  headerTextWrap: {
     flex: 1,
   },
-  suggestionName: {
-    fontSize: FontSize.md,
-    fontWeight: 'bold',
-    color: Colors.black,
-  },
-  suggestionAddress: {
-    fontSize: FontSize.sm,
-    color: Colors.grey,
-  },
-  noSuggestions: {
-    padding: Spacing.md,
-    alignItems: 'center',
-  },
-  noSuggestionsText: {
-    fontSize: FontSize.sm,
-    color: Colors.grey,
-  },
-  stopsSection: {
-    flex: 1,
-  },
-  stopsHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.lightGrey,
-  },
-  stopsTitle: {
+  headerTitle: {
     fontSize: FontSize.lg,
-    fontWeight: 'bold',
-    color: Colors.black,
+    fontFamily: 'Inter_700Bold',
+    color: Colors.slate900,
   },
-  clearAllText: {
-    fontSize: FontSize.sm,
-    fontWeight: 'bold',
-    color: Colors.error,
+  headerSubtitle: {
+    fontSize: FontSize.xs,
+    fontFamily: 'Inter_400Regular',
+    color: Colors.slate500,
   },
-  stopsList: {
+  content: {
     padding: Spacing.lg,
   },
-  stopCard: {
+  overviewCard: {
+    marginBottom: Spacing.md,
+  },
+  overviewRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 2,
-    borderColor: Colors.black,
-    borderRadius: BorderRadius.sm,
-    padding: Spacing.sm,
-    marginBottom: Spacing.sm,
-    backgroundColor: Colors.white,
-    ...Shadows.sm,
+    gap: Spacing.sm,
   },
-  stopOrderBadge: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: Colors.black,
-    justifyContent: 'center',
+  overviewIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: Colors.primary + '15',
     alignItems: 'center',
-    marginRight: Spacing.sm,
+    justifyContent: 'center',
   },
-  stopOrderText: {
-    fontSize: FontSize.md,
-    fontWeight: 'bold',
+  overviewTitle: {
+    fontSize: FontSize.sm,
+    fontFamily: 'Inter_700Bold',
+    color: Colors.slate900,
+  },
+  overviewSub: {
+    fontSize: FontSize.xs,
+    fontFamily: 'Inter_400Regular',
+    color: Colors.slate500,
+    marginTop: 2,
+  },
+  farePill: {
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: BorderRadius.full,
+  },
+  farePillText: {
+    fontSize: FontSize.xs,
+    fontFamily: 'Inter_700Bold',
     color: Colors.white,
   },
-  stopInfo: {
+  sectionLabel: {
+    fontSize: FontSize.xs,
+    fontFamily: 'Inter_600SemiBold',
+    color: Colors.slate700,
+    marginBottom: 8,
+    marginTop: Spacing.xs,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  timelineBox: {
+    marginBottom: Spacing.md,
+  },
+  timelineItem: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  nodeColumn: {
+    alignItems: 'center',
+    width: 24,
+  },
+  nodeCircle: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: Colors.slate700,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 2,
+  },
+  nodeFirst: {
+    backgroundColor: Colors.primary,
+  },
+  nodeLast: {
+    backgroundColor: Colors.success,
+  },
+  nodeOrderText: {
+    fontSize: 10,
+    fontFamily: 'Inter_700Bold',
+    color: Colors.white,
+  },
+  nodeConnector: {
+    width: 2,
     flex: 1,
+    backgroundColor: Colors.slate200,
+    marginVertical: 4,
+  },
+  stopCard: {
+    flex: 1,
+    marginBottom: Spacing.sm,
+  },
+  stopCardContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   stopName: {
-    fontSize: FontSize.md,
-    fontWeight: 'bold',
-    color: Colors.black,
+    fontSize: FontSize.sm,
+    fontFamily: 'Inter_700Bold',
+    color: Colors.slate900,
   },
   stopAddress: {
-    fontSize: FontSize.sm,
-    color: Colors.grey,
+    fontSize: FontSize.xs,
+    fontFamily: 'Inter_400Regular',
+    color: Colors.slate500,
+    marginTop: 2,
   },
-  stopActions: {
+  controlsRow: {
     flexDirection: 'row',
     gap: 4,
   },
-  stopActionButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: Colors.black,
+  controlBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 6,
+    backgroundColor: Colors.slate100,
+    alignItems: 'center',
     justifyContent: 'center',
-    alignItems: 'center',
+  },
+  controlBtnDisabled: {
+    opacity: 0.4,
+  },
+  searchWrap: {
     backgroundColor: Colors.white,
+    borderWidth: 1,
+    borderColor: Colors.slate200,
+    borderRadius: BorderRadius.md,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginBottom: Spacing.xs,
+    ...Shadows.sm,
   },
-  stopActionDisabled: {
-    opacity: 0.3,
-  },
-  stopActionText: {
-    fontSize: FontSize.md,
-    fontWeight: 'bold',
-    color: Colors.black,
-  },
-  stopActionTextDisabled: {
-    color: Colors.lightGrey,
-  },
-  stopActionRemove: {
-    borderColor: Colors.error,
-    backgroundColor: Colors.ultraLightGrey,
-  },
-  stopActionRemoveText: {
-    color: Colors.error,
-  },
-  emptyStops: {
-    paddingVertical: Spacing.xxl,
-    alignItems: 'center',
-  },
-  emptyStopsText: {
-    fontSize: FontSize.md,
-    color: Colors.grey,
-  },
-  footer: {
-    borderTopWidth: 2,
-    borderTopColor: Colors.black,
-    padding: Spacing.lg,
-  },
-  summaryCard: {
-    borderWidth: 2,
-    borderColor: Colors.black,
-    borderRadius: BorderRadius.sm,
-    padding: Spacing.sm,
-    marginBottom: Spacing.sm,
-    backgroundColor: Colors.ultraLightGrey,
-  },
-  summaryText: {
+  searchInput: {
     fontSize: FontSize.sm,
-    color: Colors.black,
-    fontWeight: '500',
-    textAlign: 'center',
+    fontFamily: 'Inter_400Regular',
+    color: Colors.slate900,
+    padding: 0,
   },
-  footerActions: {
+  suggestionsList: {
+    backgroundColor: Colors.white,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    borderColor: Colors.slate200,
+    marginBottom: Spacing.md,
+    ...Shadows.sm,
+  },
+  suggestionRow: {
     flexDirection: 'row',
-    gap: Spacing.sm,
-  },
-  footerButton: {
-    flex: 1,
-    paddingVertical: Spacing.md,
-    borderRadius: BorderRadius.sm,
     alignItems: 'center',
-    borderWidth: 2,
-    borderColor: Colors.black,
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.slate100,
   },
-  saveButton: {
-    backgroundColor: Colors.black,
+  suggestionName: {
+    fontSize: FontSize.xs,
+    fontFamily: 'Inter_600SemiBold',
+    color: Colors.slate900,
   },
-  saveButtonText: {
-    fontSize: FontSize.md,
-    fontWeight: 'bold',
+  suggestionAddress: {
+    fontSize: 10,
+    fontFamily: 'Inter_400Regular',
+    color: Colors.slate500,
+  },
+  saveWrap: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 4,
+  },
+  saveInput: {
+    flex: 1,
+    backgroundColor: Colors.white,
+    borderWidth: 1,
+    borderColor: Colors.slate200,
+    borderRadius: BorderRadius.md,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    fontSize: FontSize.sm,
+    fontFamily: 'Inter_400Regular',
+    color: Colors.slate900,
+    ...Shadows.sm,
+  },
+  saveBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 16,
+    borderRadius: BorderRadius.md,
+    justifyContent: 'center',
+    ...Shadows.sm,
+  },
+  saveBtnText: {
+    fontSize: FontSize.xs,
+    fontFamily: 'Inter_700Bold',
     color: Colors.white,
   },
-  previewButton: {
-    backgroundColor: Colors.white,
-  },
-  previewButtonText: {
-    fontSize: FontSize.md,
-    fontWeight: 'bold',
-    color: Colors.black,
-  },
-  savedCount: {
-    fontSize: FontSize.xs,
-    color: Colors.grey,
-    textAlign: 'center',
-    marginTop: Spacing.sm,
-  },
 });
-
-export default MultiStopRouteScreen;
