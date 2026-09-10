@@ -640,16 +640,19 @@ fun Route.walletRoutes() {
                 }
 
                 println("[VERIFY] Flutterwave response status: ${verifyResp.status}")
-                val responseBody = verifyResp.bodyAsText()
-                println("[VERIFY] Flutterwave response body: $responseBody")
+                val responseBodyText = verifyResp.bodyAsText()
+                println("[VERIFY] Flutterwave response body: $responseBodyText")
 
                 if (verifyResp.status.isSuccess()) {
                     val json = Json { ignoreUnknownKeys = true }
-                    val responseJson = json.parseToJsonElement(responseBody).jsonObject
+                    val responseJson = json.parseToJsonElement(responseBodyText).jsonObject
                     val status = responseJson["status"]?.jsonPrimitive?.contentOrNull
+                    val message = responseJson["message"]?.jsonPrimitive?.contentOrNull
                     val data = responseJson["data"]?.jsonObject
                     val accountName = data?.get("account_name")?.jsonPrimitive?.contentOrNull
                     val resolvedAccountNumber = data?.get("account_number")?.jsonPrimitive?.contentOrNull
+
+                    println("[VERIFY] Parsed status: $status, message: $message, accountName: $accountName")
 
                     if (status == "success" && accountName != null) {
                         call.respond(buildJsonObject {
@@ -657,10 +660,10 @@ fun Route.walletRoutes() {
                             put("accountNumber", resolvedAccountNumber)
                         })
                     } else {
-                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Could not verify account", "Account not found or invalid"))
+                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Could not verify account", message ?: "Account not found or bank not supported"))
                     }
                 } else {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Verification failed", "Flutterwave API returned ${verifyResp.status}"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Verification failed", "Flutterwave API returned ${verifyResp.status}: $responseBodyText"))
                 }
                 httpClient.close()
             } catch (e: Exception) {
