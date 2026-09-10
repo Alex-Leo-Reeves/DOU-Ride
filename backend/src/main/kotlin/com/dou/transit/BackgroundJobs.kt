@@ -55,6 +55,7 @@ fun reconcilePendingDeposits() = runBlocking {
                 flwStatus?.equals("successful", ignoreCase = true) == true -> "completed"
                 flwStatus?.equals("cancelled", ignoreCase = true) == true -> "failed"
                 flwStatus?.equals("failed", ignoreCase = true) == true -> "failed"
+                flwStatus == null -> "failed" // Flutterwave has no record - payment was cancelled/abandoned
                 else -> null
             }
             if (newStatus != null) {
