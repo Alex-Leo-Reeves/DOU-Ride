@@ -184,7 +184,7 @@ fun Route.rideRoutes() {
         // ============================================================
         post("/board") {
             val req = try { call.receive<BoardRideRequest>() }
-            catch (e: Exception) { return@post call.receive<BoardRideRequest>() }
+            catch (e: Exception) { return@post call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid request body", e.message)) }
 
             val conn = DatabaseService.getConnection()
             try {

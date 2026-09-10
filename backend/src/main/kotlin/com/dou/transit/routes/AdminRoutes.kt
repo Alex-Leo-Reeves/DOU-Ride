@@ -298,9 +298,9 @@ fun Route.adminRoutes() {
         // ============================================================
         // POST /api/admin/reports/resolve/{id} & /resolve-report/{reportId}
         // ============================================================
-        fun Route.handleResolveReport() {
+        suspend fun handleResolveReport(call: ApplicationCall) {
             val reportId = call.parameters["id"] ?: call.parameters["reportId"]
-                ?: return@handleResolveReport call.respond(HttpStatusCode.BadRequest, ErrorResponse("Missing reportId"))
+                ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse("Missing reportId"))
 
             val conn = DatabaseService.getConnection()
             try {
@@ -315,15 +315,15 @@ fun Route.adminRoutes() {
             }
         }
 
-        post("/reports/resolve/{id}") { handleResolveReport() }
-        post("/resolve-report/{reportId}") { handleResolveReport() }
+        post("/reports/resolve/{id}") { handleResolveReport(call) }
+        post("/resolve-report/{reportId}") { handleResolveReport(call) }
 
         // ============================================================
         // POST /api/admin/lost-items/close/{id} & /lost-item/close/{itemId}
         // ============================================================
-        fun Route.handleCloseLostItem() {
+        suspend fun handleCloseLostItem(call: ApplicationCall) {
             val itemId = call.parameters["id"] ?: call.parameters["itemId"]
-                ?: return@handleCloseLostItem call.respond(HttpStatusCode.BadRequest, ErrorResponse("Missing itemId"))
+                ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse("Missing itemId"))
 
             val conn = DatabaseService.getConnection()
             try {
@@ -338,15 +338,15 @@ fun Route.adminRoutes() {
             }
         }
 
-        post("/lost-items/close/{id}") { handleCloseLostItem() }
-        post("/lost-item/close/{itemId}") { handleCloseLostItem() }
+        post("/lost-items/close/{id}") { handleCloseLostItem(call) }
+        post("/lost-item/close/{itemId}") { handleCloseLostItem(call) }
 
         // ============================================================
         // POST /api/admin/wallet/adjust & /credit-wallet
         // ============================================================
-        fun Route.handleAdjustWallet() {
+        suspend fun handleAdjustWallet(call: ApplicationCall) {
             val req = try { call.receive<CreditWalletRequest>() }
-            catch (e: Exception) { return@handleAdjustWallet call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid request body", e.message)) }
+            catch (e: Exception) { return call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid request body", e.message)) }
 
             val adminId = call.request.headers["X-User-Id"] ?: "admin"
 
@@ -394,8 +394,8 @@ fun Route.adminRoutes() {
             }
         }
 
-        post("/wallet/adjust") { handleAdjustWallet() }
-        post("/credit-wallet") { handleAdjustWallet() }
+        post("/wallet/adjust") { handleAdjustWallet(call) }
+        post("/credit-wallet") { handleAdjustWallet(call) }
 
         // ============================================================
         // POST /api/admin/suspend-driver

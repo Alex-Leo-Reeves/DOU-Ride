@@ -73,7 +73,7 @@ fun Application.module() {
 
     // Application Routes
     routing {
-        fun Route.healthHandler() {
+        suspend fun handleHealth(call: ApplicationCall) {
             val dbOk = DatabaseService.isHealthy()
             call.respond(HealthResponse(
                 status = "ok",
@@ -85,9 +85,9 @@ fun Application.module() {
         }
 
         // Root & Health check endpoints
-        get("/") { healthHandler() }
-        get("/health") { healthHandler() }
-        get("/api/health") { healthHandler() }
+        get("/") { handleHealth(call) }
+        get("/health") { handleHealth(call) }
+        get("/api/health") { handleHealth(call) }
 
         // Route modules
         authRoutes()
