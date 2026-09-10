@@ -8,15 +8,19 @@ import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
+import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.contentType
 import io.ktor.http.isSuccess
+import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 
-fun reconcilePendingDeposits() {
+fun reconcilePendingDeposits() = runBlocking {
     val conn = DatabaseService.getConnection()
     try {
         val pendingStmt = conn.prepareStatement(
@@ -84,7 +88,7 @@ fun reconcilePendingDeposits() {
     } catch (e: Exception) { println("[RECONCILE] Error: ${e.message}") } finally { conn.close() }
 }
 
-fun processPendingWithdrawals() {
+fun processPendingWithdrawals() = runBlocking {
     val conn = DatabaseService.getConnection()
     try {
         val pendingStmt = conn.prepareStatement(
@@ -116,18 +120,18 @@ fun processPendingWithdrawals() {
             if (currentBalance < amount) { markWithdrawalFailed(conn, txId, "Insufficient balance"); continue }
             var transferSuccess = false
             try {
-                val httpClient = io.ktor.client.HttpClient(io.ktor.client.engine.cio.CIO)
+                val httpClient = HttpClient(CIO)
                 val transferPayload = buildJsonObject {
-                    put("account_bank", bankCode)
-                    put("account_number", accountNumber)
-                    put("amount", amount.toInt())
-                    put("currency", "NGN")
-                    put("reference", reference)
-                    put("narration", "DOU Transit Wallet Withdrawal")
+                    put("account_bank", JsonPrimitive(bankCode))
+                    put("account_number", JsonPrimitive(accountNumber))
+                    put("amount", JsonPrimitive(amount.toInt()))
+                    put("currency", JsonPrimitive("NGN"))
+                    put("reference", JsonPrimitive(reference))
+                    put("narration", JsonPrimitive("DOU Transit Wallet Withdrawal"))
                 }
                 val transferResp = httpClient.post("https://api.flutterwave.com/v3/transfers") {
-                    header(io.ktor.http.HttpHeaders.Authorization, "Bearer ${AppConfig.flutterwaveSecretKey}")
-                    contentType(io.ktor.http.ContentType.Application.Json)
+                    header(HttpHeaders.Authorization, "Bearer ${AppConfig.flutterwaveSecretKey}")
+                    contentType(ContentType.Application.Json)
                     setBody(transferPayload.toString())
                 }
                 if (transferResp.status.isSuccess()) {
