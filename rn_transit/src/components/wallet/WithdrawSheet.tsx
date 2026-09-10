@@ -41,19 +41,52 @@ export function WithdrawSheet({ visible, onClose, onSubmit, currentBalance }: Wi
   const [accountNumber, setAccountNumber] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [showBankPicker, setShowBankPicker] = useState(false);
+  const [verifyingAccount, setVerifyingAccount] = useState(false);
+  const [verifiedAccountName, setVerifiedAccountName] = useState<string | null>(null);
+  const [accountError, setAccountError] = useState<string | null>(null);
 
+  // Real account verification
   useEffect(() => {
-    // No fake verification
+    setVerifiedAccountName(null);
+    setAccountError(null);
+    
+    if (accountNumber.length === 10 && selectedBank) {
+      verifyAccountNumber();
+    }
   }, [accountNumber, selectedBank]);
 
+  const verifyAccountNumber = async () => {
+    setVerifyingAccount(true);
+    setAccountError(null);
+    try {
+      const response = await fetch('https://dou-transit-api.onrender.com/api/wallet/verify-account', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          accountNumber,
+          bankCode: selectedBank?.code,
+        }),
+      });
+      const data = await response.json();
+      if (data.accountName) {
+        setVerifiedAccountName(data.accountName);
+      } else {
+        setAccountError(data.error || 'Could not verify account');
+      }
+    } catch {
+      setAccountError('Verification failed. Please try again.');
+    } finally {
+      setVerifyingAccount(false);
+    }
+  };
+
+  const numAmount = parseFloat(amount) || 0;
+  const isInsufficientBalance = numAmount > currentBalance;
+  const isFormValid = numAmount > 0 && !isInsufficientBalance && accountNumber.length === 10 && selectedBank && verifiedAccountName;
+
   const handleSubmit = async () => {
-    const numAmount = parseFloat(amount) || 0;
     if (numAmount <= 0) {
       Alert.alert('Invalid Amount', 'Please enter a valid amount to withdraw.');
-      return;
-    }
-    if (numAmount > currentBalance) {
-      Alert.alert('Insufficient Balance', `Your available balance is ₦${currentBalance.toLocaleString()}. You cannot withdraw more than this amount.`);
       return;
     }
     if (!selectedBank) {
@@ -62,6 +95,10 @@ export function WithdrawSheet({ visible, onClose, onSubmit, currentBalance }: Wi
     }
     if (accountNumber.length < 10) {
       Alert.alert('Invalid Account', 'Please enter a valid 10-digit NUBAN account number.');
+      return;
+    }
+    if (!verifiedAccountName) {
+      Alert.alert('Account Not Verified', 'Please verify the account number before proceeding.');
       return;
     }
 
@@ -120,6 +157,9 @@ export function WithdrawSheet({ visible, onClose, onSubmit, currentBalance }: Wi
           <Text style={styles.balanceInfo}>
             Available Balance: ₦{currentBalance.toLocaleString()}
           </Text>
+          {isInsufficientBalance && numAmount > 0 && (
+            <Text style={styles.errorText}>Insufficient Balance</Text>
+          )}
 
           <Text style={styles.sectionTitle}>Receiving Bank / Fintech</Text>
           <TouchableOpacity
@@ -146,11 +186,20 @@ export function WithdrawSheet({ visible, onClose, onSubmit, currentBalance }: Wi
             keyboardType="number-pad"
             maxLength={10}
           />
+          {verifyingAccount && (
+            <Text style={styles.verifyingText}>Verifying account...</Text>
+          )}
+          {verifiedAccountName && !verifyingAccount && (
+            <Text style={styles.verifiedText}>✓ {verifiedAccountName}</Text>
+          )}
+          {accountError && !verifyingAccount && (
+            <Text style={styles.errorText}>{accountError}</Text>
+          )}
 
           <TouchableOpacity
-            style={[styles.primaryBtn, (!amount || isProcessing) && styles.disabledBtn]}
+            style={[styles.primaryBtn, (!isFormValid || isProcessing) && styles.disabledBtn]}
             onPress={handleSubmit}
-            disabled={!amount || isProcessing}
+            disabled={!isFormValid || isProcessing}
             activeOpacity={0.85}
           >
             <Text style={styles.primaryBtnText}>

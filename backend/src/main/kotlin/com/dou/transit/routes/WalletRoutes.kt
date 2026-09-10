@@ -611,6 +611,60 @@ fun Route.walletRoutes() {
         }
 
         // ============================================================
+        // POST /api/wallet/verify-account
+        // Verify bank account number using Flutterwave API
+        // ============================================================
+        post("/verify-account") {
+            val req = try { call.receive<Map<String, String>>() }
+            catch (e: Exception) { return@post call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid request body", e.message)) }
+
+            val accountNumber = req["accountNumber"] ?: ""
+            val bankCode = req["bankCode"] ?: ""
+
+            if (accountNumber.length != 10 || bankCode.isBlank()) {
+                return@post call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid account number or bank code"))
+            }
+
+            try {
+                val httpClient = HttpClient(CIO)
+                val verifyPayload = buildJsonObject {
+                    put("account_number", JsonPrimitive(accountNumber))
+                    put("account_bank", JsonPrimitive(bankCode))
+                }
+
+                val verifyResp = httpClient.post("https://api.flutterwave.com/v3/accounts/resolve") {
+                    header(HttpHeaders.Authorization, "Bearer ${AppConfig.flutterwaveSecretKey}")
+                    contentType(ContentType.Application.Json)
+                    setBody(verifyPayload.toString())
+                }
+
+                if (verifyResp.status.isSuccess()) {
+                    val json = Json { ignoreUnknownKeys = true }
+                    val responseBody = json.parseToJsonElement(verifyResp.bodyAsText()).jsonObject
+                    val status = responseBody["status"]?.jsonPrimitive?.contentOrNull
+                    val data = responseBody["data"]?.jsonObject
+                    val accountName = data?.get("account_name")?.jsonPrimitive?.contentOrNull
+                    val accountNumber = data?.get("account_number")?.jsonPrimitive?.contentOrNull
+
+                    if (status == "success" && accountName != null) {
+                        call.respond(buildJsonObject {
+                            put("accountName", accountName)
+                            put("accountNumber", accountNumber)
+                        })
+                    } else {
+                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Could not verify account", "Account not found"))
+                    }
+                } else {
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Verification failed", "Could not verify account"))
+                }
+                httpClient.close()
+            } catch (e: Exception) {
+                println("[WALLET] Account verification error: ${e.message}")
+                call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Verification failed", e.message))
+            }
+        }
+
+        // ============================================================
         // POST /api/wallet/deposit/cancel
         // Mark a pending deposit as failed (user cancelled payment)
         // ============================================================

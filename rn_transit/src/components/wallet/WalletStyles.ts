@@ -94,6 +94,24 @@ export const walletStyles = StyleSheet.create({
     marginBottom: Spacing.sm,
     fontWeight: '600',
   },
+  errorText: {
+    fontSize: FontSize.xs,
+    color: Colors.error,
+    marginTop: 4,
+    fontWeight: '600',
+  },
+  verifyingText: {
+    fontSize: FontSize.xs,
+    color: Colors.slate500,
+    marginTop: 4,
+    fontWeight: '600',
+  },
+  verifiedText: {
+    fontSize: FontSize.xs,
+    color: Colors.successDark,
+    marginTop: 4,
+    fontWeight: '600',
+  },
   txRow: {
     flexDirection: 'row',
     alignItems: 'center',
