@@ -106,27 +106,12 @@ export function WithdrawSheet({ visible, onClose, onSubmit, currentBalance }: Wi
       return;
     }
     
-    // If verification failed, ask user to confirm
-    if (!verifiedAccountName && accountError) {
-      Alert.alert(
-        'Verification Failed',
-        'Could not verify account details. Please ensure the account number and bank are correct. Continue anyway?',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Continue', onPress: () => processWithdrawal() },
-        ]
-      );
-      return;
-    }
-    
     processWithdrawal();
   };
 
   const processWithdrawal = async () => {
-    if (!selectedBank) {
-      Alert.alert('Missing Bank', 'Please select a receiving destination bank or fintech wallet.');
-      return;
-    }
+    if (!selectedBank) return;
+    
     setIsProcessing(true);
     try {
       const success = await onSubmit({
@@ -138,8 +123,8 @@ export function WithdrawSheet({ visible, onClose, onSubmit, currentBalance }: Wi
       setIsProcessing(false);
       if (success) {
         Alert.alert(
-          'Withdrawal Initiated',
-          `₦${numAmount.toLocaleString()} is being routed via Flutterwave to ${selectedBank.name} (${accountNumber}).`,
+          'Withdrawal Submitted',
+          `Your withdrawal request for ₦${numAmount.toLocaleString()} has been submitted.`,
           [{ text: 'OK', onPress: onClose }]
         );
       }
