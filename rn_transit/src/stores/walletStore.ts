@@ -11,7 +11,8 @@ interface WalletState {
 
   // Actions
   fetchBalance: (userId: string, token?: string | null) => Promise<void>;
-  deposit: (amount: number, userId: string, token?: string | null) => Promise<string | null>;
+  deposit: (amount: number, userId: string, token?: string | null) => Promise<{ paymentUrl: string; transactionRef: string } | null>;
+  verifyDeposit: (txRef: string, userId: string, token?: string | null) => Promise<{ verified: boolean; netAmount?: number; message?: string }>;
   withdraw: (data: {
     bankCode: string;
     bankName: string;
@@ -67,10 +68,29 @@ export const useWalletStore = create<WalletState>((set, get) => ({
         return null;
       }
       set({ isLoading: false });
-      return (res.paymentUrl as string) || (res.payment_url as string) || null;
+      const paymentUrl = (res.paymentUrl as string) || (res.payment_url as string) || '';
+      const transactionRef = (res.transactionRef as string) || (res.transaction_ref as string) || '';
+      return { paymentUrl, transactionRef };
     } catch (e: any) {
       set({ isLoading: false, error: e.message });
       return null;
+    }
+  },
+
+  verifyDeposit: async (txRef, userId, token) => {
+    set({ isLoading: true, error: null });
+    try {
+      const res = await api.get(`/api/wallet/verify-deposit/${txRef}`, token);
+      if (res.verified) {
+        await get().fetchBalance(userId, token);
+        set({ isLoading: false });
+        return { verified: true, netAmount: res.netAmount as number, message: res.message as string };
+      }
+      set({ isLoading: false });
+      return { verified: false, message: (res.message as string) || 'Deposit pending settlement' };
+    } catch (e: any) {
+      set({ isLoading: false, error: e.message });
+      return { verified: false, message: e.message };
     }
   },
 

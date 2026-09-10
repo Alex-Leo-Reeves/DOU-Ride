@@ -29,7 +29,7 @@ fun Application.module() {
         })
     }
 
-    // CORS - Allow Flutter app to connect
+    // CORS - Allow React Native Web & Mobile to connect
     install(CORS) {
         allowMethod(HttpMethod.Options)
         allowMethod(HttpMethod.Get)
@@ -40,6 +40,9 @@ fun Application.module() {
         allowHeader(HttpHeaders.ContentType)
         allowHeader(HttpHeaders.Authorization)
         allowHeader(HttpHeaders.AccessControlAllowOrigin)
+        allowHeader("X-User-Id")
+        allowHeader("X-FLW-SIGNATURE")
+        allowHeadersPrefixed("")
     }
 
     // Error handling
@@ -60,9 +63,21 @@ fun Application.module() {
     // ALL API ROUTES
     // ============================================================
     routing {
-        // Health check
+        // Health check with DB status
         get("/api/health") {
-            call.respond(mapOf("status" to "ok", "version" to "1.0.0"))
+            var dbOk = false
+            try {
+                DatabaseService.getConnection().use { conn ->
+                    dbOk = !conn.isClosed
+                }
+            } catch (_: Exception) {}
+            call.respond(mapOf(
+                "status" to "ok",
+                "version" to "1.0.0",
+                "service" to "DOU Transit Production API",
+                "database" to if (dbOk) "connected" else "connecting",
+                "timestamp" to System.currentTimeMillis()
+            ))
         }
 
         // Auth routes

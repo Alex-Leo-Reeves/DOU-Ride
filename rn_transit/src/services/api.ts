@@ -14,20 +14,48 @@ interface ApiResponse {
   [key: string]: unknown;
 }
 
+let _cachedAuthStore: any = null;
+function getActiveAuth(): { userId: string | null; token: string | null } {
+  try {
+    if (!_cachedAuthStore) {
+      _cachedAuthStore = require('../stores/authStore').useAuthStore;
+    }
+    const user = _cachedAuthStore?.getState?.()?.user;
+    return {
+      userId: user?.userId || null,
+      token: user?.token || null,
+    };
+  } catch {
+    return { userId: null, token: null };
+  }
+}
+
 async function request(
   endpoint: string,
   method: HttpMethod = 'GET',
   body?: Record<string, unknown>,
   token?: string | null,
+  retryCount: number = 0,
 ): Promise<ApiResponse> {
   try {
+    const auth = getActiveAuth();
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     };
-    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    const effectiveToken = token || auth.token;
+    if (effectiveToken) {
+      headers['Authorization'] = `Bearer ${effectiveToken}`;
+    }
+
+    const effectiveUserId = auth.userId;
+    if (effectiveUserId) {
+      headers['X-User-Id'] = effectiveUserId;
+    }
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
+    // 60s timeout for Render free tier cold starts
+    const timeoutId = setTimeout(() => controller.abort(), 60000);
 
     const options: RequestInit = {
       method,
@@ -59,14 +87,19 @@ async function request(
       details: decoded.details || `Status ${response.status}`,
     };
   } catch (e: any) {
-    // Differentiate between no internet and backend unreachable
+    // Transparent 1-time retry on Render cold-start / network wake-up
+    if (retryCount < 1 && (e.name === 'AbortError' || e.message?.includes('Network request failed'))) {
+      await new Promise((res) => setTimeout(res, 2500));
+      return request(endpoint, method, body, token, retryCount + 1);
+    }
+
     const msg = e.message || '';
     if (msg.includes('Network request failed') || msg.includes('fetch') || e.name === 'AbortError') {
       return {
         error: e.name === 'AbortError' ? 'Request timed out' : 'Cannot reach server',
         details: e.name === 'AbortError' 
-          ? 'The server took too long to respond. It might be waking up.'
-          : `Backend at ${API.baseUrl} is not responding. Check your connection or try again later.`,
+          ? 'The server took too long to respond. Render is waking up — please try again.'
+          : `Backend at ${API.baseUrl} is not responding. Check your connection or wait for Render to wake up.`,
         _backendUnreachable: true,
       };
     }

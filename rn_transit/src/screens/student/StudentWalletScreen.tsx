@@ -9,7 +9,10 @@ import {
   RefreshControl,
   Dimensions,
   Platform,
+  Alert,
+  Linking,
 } from 'react-native';
+import * as WebBrowser from 'expo-web-browser';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import {
@@ -48,6 +51,7 @@ export default function StudentWalletScreen() {
     clearError,
     fetchBalance,
     deposit,
+    verifyDeposit,
     withdraw,
     transfer,
   } = useWalletStore();
@@ -69,9 +73,31 @@ export default function StudentWalletScreen() {
     async (amount: number) => {
       const res = await deposit(amount, user?.userId ?? '', user?.token);
       setShowDeposit(false);
-      return res;
+      if (res?.paymentUrl) {
+        try {
+          if (Platform.OS === 'web') {
+            window.open(res.paymentUrl, '_blank');
+          } else {
+            await WebBrowser.openBrowserAsync(res.paymentUrl);
+          }
+        } catch {
+          await Linking.openURL(res.paymentUrl);
+        }
+
+        // Automatic verification poll on browser return
+        if (res.transactionRef) {
+          const verifyResult = await verifyDeposit(res.transactionRef, user?.userId ?? '', user?.token);
+          if (verifyResult.verified) {
+            Alert.alert(
+              'Deposit Confirmed! 🎉',
+              `₦${verifyResult.netAmount?.toLocaleString() ?? amount} has been added to your DOU Transit digital pass.`
+            );
+          }
+        }
+      }
+      return res?.transactionRef ?? null;
     },
-    [deposit, user?.userId, user?.token]
+    [deposit, verifyDeposit, user?.userId, user?.token]
   );
 
   const handleWithdrawSubmit = useCallback(

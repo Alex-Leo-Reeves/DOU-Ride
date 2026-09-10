@@ -6,6 +6,8 @@ import com.dou.transit.services.DatabaseService
 import com.dou.transit.services.NotificationService
 import io.ktor.client.*
 import io.ktor.client.engine.cio.*
+import io.ktor.client.request.*
+import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.request.*
@@ -118,6 +120,24 @@ fun Route.walletRoutes() {
 
             val conn = DatabaseService.getConnection()
             try {
+                // Fetch student/user profile details for Flutterwave
+                var userEmail = "student@dou.edu.ng"
+                var userName = "DOU Student"
+                var userPhone = "08000000000"
+                try {
+                    val profileStmt = conn.prepareStatement("SELECT email, full_name, phone FROM profiles WHERE id = ?::uuid")
+                    profileStmt.setString(1, userId)
+                    val profileRs = profileStmt.executeQuery()
+                    if (profileRs.next()) {
+                        val em = profileRs.getString("email")
+                        val nm = profileRs.getString("full_name")
+                        val ph = profileRs.getString("phone")
+                        if (!em.isNullOrBlank()) userEmail = em
+                        if (!nm.isNullOrBlank()) userName = nm
+                        if (!ph.isNullOrBlank()) userPhone = ph
+                    }
+                } catch (_: Exception) {}
+
                 val txStmt = conn.prepareStatement("""
                     INSERT INTO wallet_transactions (user_id, type, amount, fee, status, reference, description)
                     VALUES (?::uuid, 'deposit', ?, ?, 'pending', ?, 'Wallet deposit via Flutterwave')
@@ -128,13 +148,217 @@ fun Route.walletRoutes() {
                 txStmt.setString(4, transactionRef)
                 txStmt.executeUpdate()
 
+                // Request Flutterwave Hosted Checkout Link via server-side Secret Key
+                var checkoutLink = "https://checkout.flutterwave.com/v3/hosted/pay"
+                try {
+                    val flwPayload = buildJsonObject {
+                        put("tx_ref", transactionRef)
+                        put("amount", totalAmount.toString())
+                        put("currency", "NGN")
+                        put("redirect_url", "${AppConfig.baseUrl}/api/wallet/deposit/callback")
+                        put("customer", buildJsonObject {
+                            put("email", userEmail)
+                            put("name", userName)
+                            put("phonenumber", userPhone)
+                        })
+                        put("customizations", buildJsonObject {
+                            put("title", "DOU Transit Wallet Credit")
+                            put("description", "Dennis Osadebay University Transit Pass")
+                            put("logo", "https://dou-transit-api.onrender.com/assets/logo.png")
+                        })
+                    }
+
+                    val flwResp = httpClient.post("https://api.flutterwave.com/v3/payments") {
+                        header(HttpHeaders.Authorization, "Bearer ${AppConfig.flutterwaveSecretKey}")
+                        contentType(ContentType.Application.Json)
+                        setBody(flwPayload.toString())
+                    }
+
+                    if (flwResp.status.isSuccess()) {
+                        val bodyText = flwResp.bodyAsText()
+                        val flwJson = json.parseToJsonElement(bodyText).jsonObject
+                        val link = flwJson["data"]?.jsonObject?.get("link")?.jsonPrimitive?.contentOrNull
+                        if (!link.isNullOrBlank()) {
+                            checkoutLink = link
+                        }
+                    }
+                } catch (flwEx: Exception) {
+                    println("[WALLET] Outbound Flutterwave payment link init error: ${flwEx.message}")
+                }
+
                 call.respond(DepositResponse(
-                    paymentUrl = "https://api.flutterwave.com/v3/payments",
+                    paymentUrl = checkoutLink,
                     transactionRef = transactionRef
                 ))
             } catch (e: Exception) {
                 println("[WALLET] Deposit error: ${e.message}")
                 call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Deposit initiation failed"))
+            } finally {
+                conn.close()
+            }
+        }
+
+        // ============================================================
+        // GET /api/wallet/deposit/callback
+        // Flutterwave redirect landing page after checkout
+        // ============================================================
+        get("/deposit/callback") {
+            val txRef = call.request.queryParameters["tx_ref"] ?: ""
+            val status = call.request.queryParameters["status"] ?: ""
+
+            call.respondText(
+                contentType = ContentType.Text.Html,
+                text = """
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <meta charset="utf-8">
+                    <meta name="viewport" content="width=device-width, initial-scale=1">
+                    <title>DOU Transit - Payment Complete</title>
+                    <style>
+                        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0b1120; color: #f8fafc; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; padding: 20px; box-sizing: border-box; }
+                        .card { background: #1e293b; border: 1px solid #334155; border-radius: 16px; padding: 32px; max-width: 420px; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
+                        .badge { width: 64px; height: 64px; border-radius: 50%; background: #10b98120; color: #10b981; display: inline-flex; align-items: center; justify-content: center; font-size: 32px; margin-bottom: 16px; }
+                        h1 { font-size: 22px; margin: 0 0 8px; color: #ffffff; }
+                        p { color: #94a3b8; font-size: 14px; line-height: 1.5; margin: 0 0 24px; }
+                        .btn { display: inline-block; background: #2563eb; color: #fff; text-decoration: none; padding: 12px 24px; border-radius: 8px; font-weight: 600; font-size: 14px; }
+                    </style>
+                </head>
+                <body>
+                    <div class="card">
+                        <div class="badge">✓</div>
+                        <h1>Payment ${if (status == "successful" || status.isEmpty()) "Successful" else "Completed"}</h1>
+                        <p>Your payment (Ref: <code>${txRef.take(18)}...</code>) has been submitted. Your DOU Transit wallet will update automatically.</p>
+                        <a href="douride://wallet" class="btn">Return to DOU Transit App</a>
+                    </div>
+                    <script>
+                        setTimeout(function() {
+                            window.location.href = "douride://wallet";
+                        }, 2500);
+                    </script>
+                </body>
+                </html>
+                """.trimIndent()
+            )
+        }
+
+        // ============================================================
+        // GET /api/wallet/verify-deposit/{txRef}
+        // Verifies a Flutterwave deposit and credits the wallet immediately
+        // ============================================================
+        get("/verify-deposit/{txRef}") {
+            val txRef = call.parameters["txRef"]
+                ?: return@get call.respond(HttpStatusCode.BadRequest, ErrorResponse("Missing txRef"))
+
+            val conn = DatabaseService.getConnection()
+            try {
+                // 1. Check existing transaction
+                val txStmt = conn.prepareStatement("""
+                    SELECT id, user_id, amount, fee, status FROM wallet_transactions
+                    WHERE reference = ? AND type = 'deposit'
+                    LIMIT 1
+                """.trimIndent())
+                txStmt.setString(1, txRef)
+                val txRs = txStmt.executeQuery()
+
+                if (!txRs.next()) {
+                    return@get call.respond(HttpStatusCode.NotFound, ErrorResponse("Transaction reference not found"))
+                }
+
+                val txId = txRs.getString("id")
+                val userId = txRs.getString("user_id")
+                val totalAmount = txRs.getDouble("amount")
+                val fee = txRs.getDouble("fee")
+                val status = txRs.getString("status")
+                val netAmount = totalAmount - fee
+
+                if (status == "completed") {
+                    return@get call.respond(mapOf(
+                        "verified" to true,
+                        "status" to "completed",
+                        "netAmount" to netAmount,
+                        "message" to "Deposit already credited"
+                    ))
+                }
+
+                // 2. Query Flutterwave verification endpoint
+                var isSuccessful = false
+                try {
+                    val flwResp = httpClient.get("https://api.flutterwave.com/v3/transactions/verify_by_reference?tx_ref=$txRef") {
+                        header(HttpHeaders.Authorization, "Bearer ${AppConfig.flutterwaveSecretKey}")
+                    }
+                    if (flwResp.status.isSuccess()) {
+                        val bodyText = flwResp.bodyAsText()
+                        val flwJson = json.parseToJsonElement(bodyText).jsonObject
+                        val flwStatus = flwJson["status"]?.jsonPrimitive?.contentOrNull
+                        val dataObj = flwJson["data"]?.jsonObject
+                        val dataStatus = dataObj?.get("status")?.jsonPrimitive?.contentOrNull
+                        if (flwStatus == "success" && dataStatus == "successful") {
+                            isSuccessful = true
+                        }
+                    }
+                } catch (flwErr: Exception) {
+                    println("[WALLET] Flutterwave verification API ping error: ${flwErr.message}")
+                }
+
+                if (!isSuccessful) {
+                    return@get call.respond(mapOf(
+                        "verified" to false,
+                        "status" to status,
+                        "message" to "Payment has not yet settled with Flutterwave. Please check back shortly."
+                    ))
+                }
+
+                // 3. Credit student wallet atomically
+                val balanceStmt = conn.prepareStatement("""
+                    SELECT COALESCE(SUM(
+                        CASE WHEN type IN ('deposit','refund','transfer_in','ride_payout') THEN amount
+                             WHEN type IN ('withdrawal','ride_payment','penalty','platform_fee','transfer_out') THEN -amount
+                             ELSE 0 END
+                    ), 0.00) AS balance
+                    FROM wallet_transactions
+                    WHERE user_id = ?::uuid AND status = 'completed'
+                """.trimIndent())
+                balanceStmt.setString(1, userId)
+                val balanceRs = balanceStmt.executeQuery()
+                val currentBalance = if (balanceRs.next()) balanceRs.getDouble("balance") else 0.0
+
+                // Complete the deposit
+                val updateStmt = conn.prepareStatement("""
+                    UPDATE wallet_transactions
+                    SET status = 'completed', balance_before = ?, balance_after = ? + ?
+                    WHERE id = ?::uuid
+                """.trimIndent())
+                updateStmt.setDouble(1, currentBalance)
+                updateStmt.setDouble(2, currentBalance)
+                updateStmt.setDouble(3, netAmount)
+                updateStmt.setString(4, txId)
+                updateStmt.executeUpdate()
+
+                // Insert ₦10 platform fee entry
+                val feeStmt = conn.prepareStatement("""
+                    INSERT INTO wallet_transactions (user_id, type, amount, fee, balance_before, balance_after, status, reference, description)
+                    VALUES (?::uuid, 'platform_fee', ?, 0.00, ?, ?, 'completed', ?, 'Deposit gateway processing fee')
+                """.trimIndent())
+                feeStmt.setString(1, userId)
+                feeStmt.setDouble(2, -fee)
+                feeStmt.setDouble(3, currentBalance + netAmount)
+                feeStmt.setDouble(4, currentBalance + netAmount)
+                feeStmt.setString(5, "$txRef-fee")
+                feeStmt.executeUpdate()
+
+                val newBalance = currentBalance + netAmount
+
+                call.respond(mapOf(
+                    "verified" to true,
+                    "status" to "completed",
+                    "netAmount" to netAmount,
+                    "newBalance" to newBalance,
+                    "message" to "Wallet credited successfully with ₦${netAmount.toInt()}"
+                ))
+            } catch (e: Exception) {
+                println("[WALLET] Verify deposit error: ${e.message}")
+                call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to verify deposit", e.message))
             } finally {
                 conn.close()
             }
@@ -342,17 +566,17 @@ fun Route.walletRoutes() {
     // ============================================================
     // POST /api/flutterwave/webhook
     // Handles Flutterwave payment/transfer events
-    // ============================================================
     post("/api/flutterwave/webhook") {
-        val signature = call.request.headers["X-FLW-SIGNATURE"]
+        val signature = call.request.headers["verif-hash"]
+            ?: call.request.headers["X-FLW-SIGNATURE"]
             ?: return@post call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Missing signature"))
 
         val rawBody = call.receiveText()
 
-        // Verify webhook signature using HMAC-SHA256
+        // Verify webhook signature (supports Flutterwave direct hash or HMAC-SHA256)
         val expectedSignature = hmacSha256(rawBody, AppConfig.flutterwaveSecretHash)
-        if (signature != expectedSignature) {
-            println("[WEBHOOK] Invalid signature — possible tampering")
+        if (signature != AppConfig.flutterwaveSecretHash && signature != expectedSignature) {
+            println("[WEBHOOK] Invalid signature ($signature) — possible tampering")
             return@post call.respond(SuccessResponse("Webhook received"))
         }
 

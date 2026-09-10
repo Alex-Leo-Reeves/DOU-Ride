@@ -464,7 +464,7 @@ fun Route.rideRoutes() {
 
             val conn = DatabaseService.getConnection()
             try {
-                // Find the pay link by QR data
+                // Find the pay link by QR data, or parse fallback
                 val plStmt = conn.prepareStatement("""
                     SELECT id, driver_id, amount, trip_id, qr_code_data
                     FROM driver_pay_links WHERE qr_code_data = ? AND is_active = true
@@ -473,13 +473,59 @@ fun Route.rideRoutes() {
                 plStmt.setString(1, req.qrData)
                 val plRs = plStmt.executeQuery()
 
-                if (!plRs.next()) {
-                    return@post call.respond(HttpStatusCode.NotFound, ErrorResponse("Invalid or expired pay link"))
+                var driverId: String? = null
+                var amount = 100.0
+                var tripId: String? = null
+                var payLinkFound = false
+
+                if (plRs.next()) {
+                    payLinkFound = true
+                    driverId = plRs.getString("driver_id")
+                    amount = plRs.getDouble("amount")
+                    tripId = plRs.getString("trip_id")
+                } else {
+                    // Fallback: Parse qrData as JSON or Fleet lookup
+                    try {
+                        val parsed = Json.parseToJsonElement(req.qrData).jsonObject
+                        val parsedDriverId = parsed["driver_id"]?.jsonPrimitive?.contentOrNull
+                        val parsedFleet = parsed["fleet_number"]?.jsonPrimitive?.intOrNull
+                        val parsedAmount = parsed["amount"]?.jsonPrimitive?.doubleOrNull
+                        val parsedTrip = parsed["trip_id"]?.jsonPrimitive?.contentOrNull
+
+                        if (parsedAmount != null && parsedAmount > 0) {
+                            amount = parsedAmount
+                        }
+                        if (parsedTrip != null && parsedTrip.isNotBlank()) {
+                            tripId = parsedTrip
+                        }
+
+                        if (parsedDriverId != null && parsedDriverId.isNotBlank() && !parsedDriverId.startsWith("fleet-")) {
+                            driverId = parsedDriverId
+                        } else if (parsedFleet != null) {
+                            val drvLookup = conn.prepareStatement("SELECT user_id FROM driver_details WHERE fleet_number = ? LIMIT 1")
+                            drvLookup.setInt(1, parsedFleet)
+                            val drvRs = drvLookup.executeQuery()
+                            if (drvRs.next()) {
+                                driverId = drvRs.getString("user_id")
+                            }
+                        }
+                    } catch (_: Exception) {
+                        // Not JSON, check if it's a numeric Fleet Number string (e.g. "042" or "DOU-042")
+                        val digits = req.qrData.filter { it.isDigit() }.toIntOrNull()
+                        if (digits != null) {
+                            val drvLookup = conn.prepareStatement("SELECT user_id FROM driver_details WHERE fleet_number = ? LIMIT 1")
+                            drvLookup.setInt(1, digits)
+                            val drvRs = drvLookup.executeQuery()
+                            if (drvRs.next()) {
+                                driverId = drvRs.getString("user_id")
+                            }
+                        }
+                    }
                 }
 
-                val driverId = plRs.getString("driver_id")
-                val amount = plRs.getDouble("amount")
-                val tripId = plRs.getString("trip_id")
+                if (driverId == null) {
+                    return@post call.respond(HttpStatusCode.NotFound, ErrorResponse("Invalid or expired pay link — driver could not be verified"))
+                }
 
                 // Check student balance
                 val balStmt = conn.prepareStatement("""
@@ -496,7 +542,7 @@ fun Route.rideRoutes() {
                 val studentBalance = if (balRs.next()) balRs.getDouble("balance") else 0.0
 
                 if (studentBalance < amount) {
-                    return@post call.respond(HttpStatusCode.BadRequest, ErrorResponse("Insufficient balance"))
+                    return@post call.respond(HttpStatusCode.BadRequest, ErrorResponse("Insufficient balance. Required: ₦${amount.toInt()}, Available: ₦${studentBalance.toInt()}"))
                 }
 
                 val reference = "PAY-${System.currentTimeMillis()}-${UUID.randomUUID().toString().take(8)}"
@@ -504,7 +550,7 @@ fun Route.rideRoutes() {
                 // Debit student
                 val debitStmt = conn.prepareStatement("""
                     INSERT INTO wallet_transactions (user_id, type, amount, fee, balance_before, balance_after, status, reference, description)
-                    VALUES (?::uuid, 'ride_payment', ?, 0.00, ?, ?, 'completed', ?, 'Ride payment via pay link')
+                    VALUES (?::uuid, 'ride_payment', ?, 0.00, ?, ?, 'completed', ?, 'Transit fare payment')
                 """.trimIndent())
                 debitStmt.setString(1, studentId)
                 debitStmt.setDouble(2, -amount)
@@ -529,7 +575,7 @@ fun Route.rideRoutes() {
 
                 val creditStmt = conn.prepareStatement("""
                     INSERT INTO wallet_transactions (user_id, type, amount, fee, balance_before, balance_after, status, reference, description)
-                    VALUES (?::uuid, 'ride_payout', ?, 0.00, ?, ?, 'completed', ?, 'Ride payout from pay link')
+                    VALUES (?::uuid, 'ride_payout', ?, 0.00, ?, ?, 'completed', ?, 'Transit fare received')
                 """.trimIndent())
                 creditStmt.setString(1, driverId)
                 creditStmt.setDouble(2, amount)
@@ -538,14 +584,16 @@ fun Route.rideRoutes() {
                 creditStmt.setString(5, "${reference}-drv")
                 creditStmt.executeUpdate()
 
-                // Deactivate pay link
-                val deactStmt = conn.prepareStatement(
-                    "UPDATE driver_pay_links SET is_active = false WHERE qr_code_data = ?"
-                )
-                deactStmt.setString(1, req.qrData)
-                deactStmt.executeUpdate()
+                // Deactivate pay link if registered
+                if (payLinkFound) {
+                    val deactStmt = conn.prepareStatement(
+                        "UPDATE driver_pay_links SET is_active = false WHERE qr_code_data = ?"
+                    )
+                    deactStmt.setString(1, req.qrData)
+                    deactStmt.executeUpdate()
+                }
 
-                // Update trip payment status
+                // Update trip payment status if tripId is present
                 if (tripId != null) {
                     val tripPayStmt = conn.prepareStatement("""
                         UPDATE trip_passengers SET payment_status = 'paid', fare_paid = ?
@@ -557,7 +605,30 @@ fun Route.rideRoutes() {
                     tripPayStmt.executeUpdate()
                 }
 
-                call.respond(mapOf("success" to true, "message" to "Payment successful"))
+                // Push notification to driver
+                try {
+                    val notifStmt = conn.prepareStatement("""
+                        SELECT token, platform FROM notification_tokens
+                        WHERE user_id = ?::uuid AND is_active = true ORDER BY created_at DESC LIMIT 1
+                    """.trimIndent())
+                    notifStmt.setString(1, driverId)
+                    val notifRs = notifStmt.executeQuery()
+                    if (notifRs.next()) {
+                        NotificationService.sendPush(
+                            token = notifRs.getString("token"),
+                            title = "💰 Fare Received!",
+                            body = "₦${amount.toInt()} paid by passenger",
+                            platform = notifRs.getString("platform")
+                        )
+                    }
+                } catch (_: Exception) {}
+
+                call.respond(mapOf(
+                    "success" to true,
+                    "amount" to amount,
+                    "reference" to reference,
+                    "message" to "Payment of ₦${amount.toInt()} completed successfully"
+                ))
             } catch (e: Exception) {
                 println("[RIDES] Pay-link scan error: ${e.message}")
                 call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Payment processing failed"))

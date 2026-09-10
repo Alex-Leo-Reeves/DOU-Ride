@@ -40,6 +40,7 @@ import { BalancePill } from '../../components/BalancePill';
 import { PassengerPaymentFeed } from '../../components/PassengerPaymentFeed';
 import { ReportDriverSheet } from '../../components/ReportDriverSheet';
 import { WithdrawSheet } from '../../components/wallet';
+import QRCode from 'react-native-qrcode-svg';
 
 export default function DriverPayLinkScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<any>>();
@@ -322,7 +323,20 @@ export default function DriverPayLinkScreen() {
 
           {/* QR Display Frame */}
           <View style={styles.qrFrame}>
-            <QrCode size={160} color={Colors.slate900} strokeWidth={1.8} />
+            <View style={{ padding: 12, backgroundColor: '#FFFFFF', borderRadius: 16, alignItems: 'center', justifyContent: 'center' }}>
+              <QRCode
+                value={JSON.stringify({
+                  driver_id: user?.userId ?? '',
+                  fleet_number: typeof fleetNumber === 'number' ? fleetNumber : parseInt(String(fleetNumber), 10) || 42,
+                  amount: amount,
+                  trip_id: currentTripId ?? '',
+                  timestamp: Date.now(),
+                })}
+                size={160}
+                color={Colors.slate900}
+                backgroundColor="#FFFFFF"
+              />
+            </View>
             <Text style={styles.qrFleetCode}>DRIVER ID: DOU-{fleetNumber}</Text>
             <Text style={styles.qrAmountBadge}>
               {isDropMode ? '₦1,500 FLAT (LOCKED)' : `₦${amount} FARE`}
