@@ -42,7 +42,7 @@ fun Route.walletRoutes() {
 
                 val balanceStmt = conn.prepareStatement("""
                     SELECT COALESCE(SUM(
-                        CASE WHEN type IN ('deposit','refund','transfer_in','ride_payout') THEN amount
+                        CASE WHEN type IN ('deposit','refund','transfer_in','ride_payout') THEN amount - fee
                              WHEN type IN ('withdrawal','ride_payment','penalty','platform_fee','transfer_out') THEN -amount
                              ELSE 0 END
                     ), 0.00) AS balance
