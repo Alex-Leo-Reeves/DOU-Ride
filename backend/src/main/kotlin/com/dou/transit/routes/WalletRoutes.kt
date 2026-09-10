@@ -769,13 +769,81 @@ fun Route.walletRoutes() {
                     }
                 }
 
-                call.respond(buildJsonObject {
-                    put("reconciled", results.size)
-                    put("results", results)
-                })
+        // ============================================================
+        // POST /api/wallet/deposit/manual-fix
+        // Manually resolve stuck deposits (for cancelled/unsuccessful payments)
+        // ============================================================
+        post("/deposit/manual-fix") {
+            val req = try { call.receive<Map<String, String>>() }
+            catch (e: Exception) { return@post call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid request body", e.message)) }
+
+            val txRef = req["transactionRef"]
+            val action = req["action"] // "fail" or "complete"
+
+            if (txRef.isNullOrBlank() || action.isNullOrBlank()) {
+                return@post call.respond(HttpStatusCode.BadRequest, ErrorResponse("Missing transactionRef or action"))
+            }
+
+            if (action != "fail" && action != "complete") {
+                return@post call.respond(HttpStatusCode.BadRequest, ErrorResponse("Action must be 'fail' or 'complete'"))
+            }
+
+            val userId = call.request.headers["X-User-Id"]
+                ?: return@post call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Not authenticated"))
+
+            val conn = DatabaseService.getConnection()
+            try {
+                val txStmt = conn.prepareStatement("SELECT id, user_id, amount, fee, status FROM wallet_transactions WHERE reference = ? AND user_id = ?::uuid LIMIT 1")
+                txStmt.setString(1, txRef)
+                txStmt.setString(2, userId)
+                val txRs = txStmt.executeQuery()
+
+                if (!txRs.next()) {
+                    return@post call.respond(HttpStatusCode.NotFound, ErrorResponse("Transaction not found"))
+                }
+
+                val txUserId = txRs.getString("user_id")
+                val totalAmount = txRs.getDouble("amount")
+                val fee = txRs.getDouble("fee")
+                val currentStatus = txRs.getString("status")
+                val netAmount = totalAmount - fee
+
+                if (currentStatus == "completed") {
+                    return@post call.respond(SuccessResponse("Transaction already completed"))
+                }
+
+                if (action == "complete") {
+                    val balStmt = conn.prepareStatement("SELECT COALESCE(SUM(CASE WHEN type IN ('deposit','refund','transfer_in','ride_payout') THEN amount WHEN type IN ('withdrawal','ride_payment','penalty','platform_fee','transfer_out') THEN -amount ELSE 0 END), 0.00) AS balance FROM wallet_transactions WHERE user_id = ?::uuid AND status = 'completed'")
+                    balStmt.setString(1, txUserId)
+                    val balRs = balStmt.executeQuery()
+                    val currentBalance = if (balRs.next()) balRs.getDouble("balance") else 0.0
+                    val newBalance = currentBalance + netAmount
+
+                    val updateStmt = conn.prepareStatement("UPDATE wallet_transactions SET status = 'completed', balance_before = ?, balance_after = ?, updated_at = now() WHERE reference = ?")
+                    updateStmt.setDouble(1, currentBalance)
+                    updateStmt.setDouble(2, newBalance)
+                    updateStmt.setString(3, txRef)
+                    val updated = updateStmt.executeUpdate()
+
+                    if (updated > 0) {
+                        call.respond(SuccessResponse("Deposit completed successfully. ₦${netAmount.toInt()} credited to wallet."))
+                    } else {
+                        call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to update transaction"))
+                    }
+                } else {
+                    val updateStmt = conn.prepareStatement("UPDATE wallet_transactions SET status = 'failed', updated_at = now() WHERE reference = ?")
+                    updateStmt.setString(1, txRef)
+                    val updated = updateStmt.executeUpdate()
+
+                    if (updated > 0) {
+                        call.respond(SuccessResponse("Deposit marked as failed/cancelled."))
+                    } else {
+                        call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to update transaction"))
+                    }
+                }
             } catch (e: Exception) {
-                println("[WALLET] Reconcile error: ${e.message}")
-                call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Reconciliation failed", e.message))
+                println("[WALLET] Manual fix error: ${e.message}")
+                call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Manual fix failed", e.message))
             } finally {
                 conn.close()
             }
