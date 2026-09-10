@@ -100,6 +100,12 @@ export const walletStyles = StyleSheet.create({
     marginTop: 4,
     fontWeight: '600',
   },
+  warningText: {
+    fontSize: FontSize.xs,
+    color: Colors.warningDark,
+    marginTop: 4,
+    fontWeight: '600',
+  },
   verifyingText: {
     fontSize: FontSize.xs,
     color: Colors.slate500,

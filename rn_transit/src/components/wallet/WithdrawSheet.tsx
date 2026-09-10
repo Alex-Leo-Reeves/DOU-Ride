@@ -82,7 +82,9 @@ export function WithdrawSheet({ visible, onClose, onSubmit, currentBalance }: Wi
 
   const numAmount = parseFloat(amount) || 0;
   const isInsufficientBalance = numAmount > currentBalance;
-  const isFormValid = numAmount > 0 && !isInsufficientBalance && accountNumber.length === 10 && selectedBank && verifiedAccountName;
+  const isAccountVerified = verifiedAccountName != null;
+  const isVerificationFailed = accountError != null;
+  const isFormValid = numAmount > 0 && !isInsufficientBalance && accountNumber.length === 10 && selectedBank && (isAccountVerified || isVerificationFailed);
 
   const handleSubmit = async () => {
     if (numAmount <= 0) {
@@ -97,11 +99,24 @@ export function WithdrawSheet({ visible, onClose, onSubmit, currentBalance }: Wi
       Alert.alert('Invalid Account', 'Please enter a valid 10-digit NUBAN account number.');
       return;
     }
-    if (!verifiedAccountName) {
-      Alert.alert('Account Not Verified', 'Please verify the account number before proceeding.');
+    
+    // If verification failed, ask user to confirm
+    if (!verifiedAccountName && accountError) {
+      Alert.alert(
+        'Verification Failed',
+        'Could not verify account details. Please ensure the account number and bank are correct. Continue anyway?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Continue', onPress: () => processWithdrawal() },
+        ]
+      );
       return;
     }
+    
+    processWithdrawal();
+  };
 
+  const processWithdrawal = async () => {
     setIsProcessing(true);
     try {
       const success = await onSubmit({
@@ -193,7 +208,7 @@ export function WithdrawSheet({ visible, onClose, onSubmit, currentBalance }: Wi
             <Text style={styles.verifiedText}>✓ {verifiedAccountName}</Text>
           )}
           {accountError && !verifyingAccount && (
-            <Text style={styles.errorText}>{accountError}</Text>
+            <Text style={styles.warningText}>⚠ {accountError} - Please verify details are correct</Text>
           )}
 
           <TouchableOpacity
