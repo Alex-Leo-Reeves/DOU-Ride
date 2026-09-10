@@ -88,9 +88,9 @@ export function WithdrawSheet({ visible, onClose, onSubmit, currentBalance }: Wi
 
   const numAmount = parseFloat(amount) || 0;
   const isInsufficientBalance = numAmount > currentBalance;
-  const isAccountVerified = verifiedAccountName != null;
-  const isVerificationFailed = accountError != null;
-  const isFormValid = numAmount > 0 && !isInsufficientBalance && accountNumber.length === 10 && selectedBank && (isAccountVerified || isVerificationFailed);
+  const hasValidAmount = numAmount > 0 && !isInsufficientBalance;
+  const hasValidAccount = accountNumber.length === 10 && selectedBank;
+  const isFormValid = hasValidAmount && hasValidAccount;
 
   const handleSubmit = async () => {
     if (numAmount <= 0) {
