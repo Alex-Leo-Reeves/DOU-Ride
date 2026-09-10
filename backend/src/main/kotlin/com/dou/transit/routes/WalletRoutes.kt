@@ -776,6 +776,18 @@ fun Route.walletRoutes() {
                     }
                 }
 
+                call.respond(buildJsonObject {
+                    put("reconciled", results.size)
+                    put("results", results)
+                })
+            } catch (e: Exception) {
+                println("[WALLET] Reconcile error: ${e.message}")
+                call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Reconciliation failed", e.message))
+            } finally {
+                conn.close()
+            }
+        }
+
         // ============================================================
         // POST /api/wallet/deposit/manual-fix
         // Manually resolve stuck deposits (for cancelled/unsuccessful payments)

@@ -6,9 +6,15 @@ import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
 import io.ktor.client.request.get
 import io.ktor.client.request.header
+import io.ktor.client.request.post
+import io.ktor.client.request.setBody
+import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
+import io.ktor.http.contentType
 import io.ktor.http.isSuccess
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonObject
 
 fun reconcilePendingDeposits() {
     val conn = DatabaseService.getConnection()
@@ -111,7 +117,7 @@ fun processPendingWithdrawals() {
             var transferSuccess = false
             try {
                 val httpClient = io.ktor.client.HttpClient(io.ktor.client.engine.cio.CIO)
-                val transferPayload = kotlinx.serialization.json.buildJsonObject {
+                val transferPayload = buildJsonObject {
                     put("account_bank", bankCode)
                     put("account_number", accountNumber)
                     put("amount", amount.toInt())
