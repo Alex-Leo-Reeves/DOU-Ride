@@ -117,7 +117,7 @@ export default function StudentWalletScreen() {
             } else {
               Alert.alert(
                 'Payment Verification Pending',
-                `Your payment is being processed. Reference: ${res.transactionRef.substring(0, 14)}...\n\nYour wallet will be credited automatically once payment settles.`
+                `Your payment is being processed. Reference: ${res.transactionRef}\n\nYour wallet will be credited automatically once payment settles.`
               );
             }
           };

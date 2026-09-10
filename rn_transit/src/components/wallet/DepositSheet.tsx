@@ -46,7 +46,7 @@ export function DepositSheet({ visible, onClose, onSubmit }: DepositSheetProps) 
       if (result) {
         Alert.alert(
           'Payment Initiated',
-          `Reference: ${result.substring(0, 14)}...\n\nComplete the payment in your browser. Your wallet will be credited automatically once payment is confirmed.`,
+          `Reference: ${result}\n\nComplete the payment in your browser. Your wallet will be credited automatically once payment is confirmed.`,
           [{ text: 'OK', onPress: onClose }]
         );
       } else {

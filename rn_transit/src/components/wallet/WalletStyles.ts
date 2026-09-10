@@ -117,6 +117,12 @@ export const walletStyles = StyleSheet.create({
     color: Colors.slate500,
     marginTop: 2,
   },
+  txReference: {
+    fontSize: 10,
+    color: Colors.slate400,
+    marginTop: 1,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  },
   txAmount: {
     fontSize: FontSize.md,
     fontWeight: '700',

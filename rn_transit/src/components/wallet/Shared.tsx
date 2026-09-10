@@ -20,6 +20,8 @@ export function TransactionRow({ tx }: { tx: Transaction }) {
     refund: '↩', penalty: '⚠', platform_fee: '⚙', transfer_in: '📥', transfer_out: '📤',
   };
 
+  const statusColor = tx.status === 'completed' ? Colors.success : tx.status === 'failed' ? Colors.error : Colors.warning;
+
   return (
     <View style={styles.txRow}>
       <View style={styles.txIcon}>
@@ -30,6 +32,9 @@ export function TransactionRow({ tx }: { tx: Transaction }) {
         <Text style={styles.txStatus}>
           {tx.status === 'completed' ? tx.createdAt.substring(0, 10) : tx.status}
         </Text>
+        {tx.reference && tx.status !== 'completed' && (
+          <Text style={styles.txReference}>Ref: {tx.reference}</Text>
+        )}
       </View>
       <Text style={[styles.txAmount, { color: isCredit ? Colors.success : Colors.error }]}>
         {isCredit ? '+' : ''}₦{Math.abs(tx.amount).toFixed(0)}
