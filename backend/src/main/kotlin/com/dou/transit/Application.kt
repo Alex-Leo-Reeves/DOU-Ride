@@ -9,8 +9,8 @@ import io.ktor.server.application.*
 import io.ktor.server.engine.*
 import io.ktor.server.netty.*
 import io.ktor.server.plugins.contentnegotiation.*
-import io.ktor.server.plugins.cors.routing.*
 import io.ktor.server.plugins.statuspages.*
+import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import kotlinx.serialization.json.Json
@@ -29,20 +29,21 @@ fun Application.module() {
         })
     }
 
-    // CORS - Allow React Native Web & Mobile to connect
-    install(CORS) {
-        allowMethod(HttpMethod.Options)
-        allowMethod(HttpMethod.Get)
-        allowMethod(HttpMethod.Post)
-        allowMethod(HttpMethod.Put)
-        allowMethod(HttpMethod.Delete)
-        anyHost()
-        allowHeader(HttpHeaders.ContentType)
-        allowHeader(HttpHeaders.Authorization)
-        allowHeader(HttpHeaders.AccessControlAllowOrigin)
-        allowHeader("X-User-Id")
-        allowHeader("X-FLW-SIGNATURE")
-        allowHeadersPrefixed("")
+    // CORS - Manual intercept guarantees headers on every response including OPTIONS preflight
+    intercept(ApplicationCallPipeline.Plugins) {
+        val origin = call.request.headers["Origin"] ?: "*"
+        call.response.header(HttpHeaders.AccessControlAllowOrigin, origin)
+        call.response.header(HttpHeaders.AccessControlAllowMethods, "GET, POST, PUT, DELETE, PATCH, OPTIONS")
+        call.response.header(HttpHeaders.AccessControlAllowHeaders, "Content-Type, Authorization, X-User-Id, X-FLW-SIGNATURE, X-Requested-With, verif-hash")
+        call.response.header(HttpHeaders.AccessControlMaxAge, "86400")
+        call.response.header(HttpHeaders.AccessControlAllowCredentials, "true")
+
+        // Auto-respond OK to all preflight OPTIONS requests
+        if (call.request.httpMethod == HttpMethod.Options) {
+            call.respond(HttpStatusCode.OK)
+            finish()
+            return@intercept
+        }
     }
 
     // Error handling
