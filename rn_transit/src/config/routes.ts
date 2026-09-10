@@ -5,6 +5,7 @@ export const Routes = {
   studentRegister: 'StudentRegister',
   driverRegister: 'DriverRegister',
   login: 'Login',
+  driverLogin: 'DriverLogin',
   developerLogin: 'DeveloperLogin',
   pwaInstall: 'PwaInstall',
   portalVerification: 'PortalVerification',
@@ -56,4 +57,10 @@ export const Routes = {
   multiStopRoute: 'MultiStopRoute',
   locationSharing: 'LocationSharing',
   offlineSettings: 'OfflineSettings',
+  settings: 'Settings',
+
+  // Tab Navigators
+  studentTabs: 'StudentTabs',
+  driverTabs: 'DriverTabs',
+  adminTabs: 'AdminTabs',
 } as const;

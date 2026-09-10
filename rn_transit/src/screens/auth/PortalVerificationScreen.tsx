@@ -107,32 +107,23 @@ export default function PortalVerificationScreen() {
     [checkMatric]
   );
 
-  const handleDemoAutofill = () => {
-    const demoData: PortalScrapeResult = {
-      matricNumber: 'DOU/2022/SCI/0491',
-      fullName: 'Chukwuebuka Daniel Okafor',
-      department: 'Computer Science',
-      faculty: 'Faculty of Science',
-      level: '300',
-      email: 'c.okafor@dou.edu.ng',
-    };
-    setResult(demoData);
-    checkMatric(demoData.matricNumber);
-  };
-
-  const handleManualSubmit = () => {
+  const handleManualSubmit = async () => {
     if (!manualMatric.trim() || !manualName.trim()) return;
+    setIsLoading(true);
     const manualResult: PortalScrapeResult = {
       matricNumber: manualMatric.trim().toUpperCase(),
       fullName: manualName.trim(),
-      department: manualDept.trim() || 'Computer Science',
-      faculty: manualFaculty.trim() || 'Faculty of Science',
+      department: manualDept.trim() || '',
+      faculty: manualFaculty.trim() || '',
       level: '300',
       email: manualEmail.trim() || `${manualMatric.replace(/\//g, '').toLowerCase()}@dou.edu.ng`,
     };
     setResult(manualResult);
-    checkMatric(manualResult.matricNumber);
+    await checkMatric(manualResult.matricNumber);
+    setIsLoading(false);
   };
+
+
 
   const handleLoginExisting = async () => {
     if (!existingUser?.email) return;
@@ -216,23 +207,7 @@ export default function PortalVerificationScreen() {
               </TouchableOpacity>
             ) : null}
 
-            {/* Fast Demo Autofill */}
-            <DouCard variant="elevated" padding={Spacing.md} style={styles.demoCard}>
-              <View style={styles.demoHeader}>
-                <Sparkles size={18} color={Colors.primary} />
-                <Text style={styles.demoTitle}>One-Click Demo Verification</Text>
-              </View>
-              <Text style={styles.demoSub}>
-                Instantly populate a verified DOU student record for rapid testing.
-              </Text>
-              <TouchableOpacity
-                style={styles.demoBtn}
-                onPress={handleDemoAutofill}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.demoBtnText}>Simulate Portal Handshake</Text>
-              </TouchableOpacity>
-            </DouCard>
+
 
             {/* Manual Matric Fallback */}
             <View style={styles.manualSection}>

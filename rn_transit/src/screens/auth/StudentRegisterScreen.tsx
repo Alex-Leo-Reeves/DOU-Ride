@@ -103,7 +103,7 @@ export default function StudentRegisterScreen() {
     });
 
     if (success) {
-      navigation.reset({ index: 0, routes: [{ name: Routes.studentHome }] });
+      navigation.reset({ index: 0, routes: [{ name: Routes.studentTabs }] });
     }
   };
 

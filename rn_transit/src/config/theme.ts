@@ -54,6 +54,7 @@ export const Colors = {
   error: '#EF4444',           // Crimson
   errorSoft: '#FEF2F2',
   errorDark: '#B91C1C',
+  danger: '#EF4444',          // Danger alias for error
 
   warning: '#F59E0B',         // Amber
   warningSoft: '#FFFBEB',
@@ -138,6 +139,13 @@ export const Shadows = StyleSheet.create({
     shadowOpacity: 0.08,
     shadowRadius: 8,
     elevation: 4,
+  },
+  card: {
+    shadowColor: Colors.slate900,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
   },
   lg: {
     shadowColor: Colors.slate900,

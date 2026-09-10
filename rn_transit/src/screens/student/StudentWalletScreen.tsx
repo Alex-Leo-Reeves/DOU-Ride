@@ -29,13 +29,21 @@ import {
   Clock,
   Sparkles,
   ShoppingBag,
+  Users,
+  Heart,
 } from 'lucide-react-native';
 import { Colors, Spacing, FontSize, BorderRadius, Shadows } from '../../config/theme';
 import { useAuthStore } from '../../stores/authStore';
 import { useWalletStore } from '../../stores/walletStore';
 import { DouCard } from '../../components/DouCard';
 import { Transaction } from '../../types';
-import { DepositSheet, WithdrawSheet, TransferSheet } from '../../components/wallet';
+import {
+  DepositSheet,
+  WithdrawSheet,
+  TransferSheet,
+  PayFriendSheet,
+  PayKekeFeeSheet,
+} from '../../components/wallet';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -59,6 +67,8 @@ export default function StudentWalletScreen() {
   const [showDeposit, setShowDeposit] = useState(false);
   const [showWithdraw, setShowWithdraw] = useState(false);
   const [showTransfer, setShowTransfer] = useState(false);
+  const [showPayFriend, setShowPayFriend] = useState(false);
+  const [showPayKekeFee, setShowPayKekeFee] = useState(false);
   const [activeFilter, setActiveFilter] = useState<'all' | 'rides' | 'deposits' | 'transfers'>('all');
 
   const handleFetchBalance = useCallback(() => {
@@ -118,6 +128,46 @@ export default function StudentWalletScreen() {
     [transfer, user?.userId, user?.token]
   );
 
+  const handlePayFriendSubmit = useCallback(
+    async (data: { friendId: string; amount: number; note: string }) => {
+      const res = await transfer(
+        {
+          recipientId: data.friendId,
+          amount: data.amount,
+          note: data.note,
+        },
+        user?.userId ?? '',
+        user?.token
+      );
+      if (res) {
+        setShowPayFriend(false);
+        return true;
+      }
+      return false;
+    },
+    [transfer, user?.userId, user?.token]
+  );
+
+  const handlePayKekeFeeSubmit = useCallback(
+    async (data: { fleetNumber: string; amount: number; note: string }) => {
+      const res = await transfer(
+        {
+          recipientId: `FLEET-${data.fleetNumber}`,
+          amount: data.amount,
+          note: data.note,
+        },
+        user?.userId ?? '',
+        user?.token
+      );
+      if (res) {
+        setShowPayKekeFee(false);
+        return true;
+      }
+      return false;
+    },
+    [transfer, user?.userId, user?.token]
+  );
+
   const getTxIcon = (type: string) => {
     switch (type) {
       case 'deposit':
@@ -154,9 +204,9 @@ export default function StudentWalletScreen() {
       case 'platform_fee':
         return 'Gateway Service Fee';
       case 'transfer_in':
-        return 'P2P Received';
+        return 'Friend Transfer Received';
       case 'transfer_out':
-        return 'P2P Sent';
+        return 'Transfer to Friend';
       case 'marketplace_order':
         return 'Cafeteria Order';
       default:
@@ -248,7 +298,7 @@ export default function StudentWalletScreen() {
           </View>
         </View>
 
-        {/* Action Buttons Row */}
+        {/* Action Buttons Row 1: Top Up, Friend Transfer, Pay For Friend */}
         <View style={styles.actionsRow}>
           <TouchableOpacity
             style={styles.actionBtn}
@@ -256,22 +306,10 @@ export default function StudentWalletScreen() {
             activeOpacity={0.85}
           >
             <View style={[styles.actionIconBox, { backgroundColor: Colors.successSoft }]}>
-              <ArrowDownLeft size={22} color={Colors.successDark} strokeWidth={2.5} />
+              <ArrowDownLeft size={20} color={Colors.successDark} strokeWidth={2.5} />
             </View>
             <Text style={styles.actionBtnLabel}>Deposit</Text>
             <Text style={styles.actionBtnSub}>+₦10 Fee</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.actionBtn}
-            onPress={() => setShowWithdraw(true)}
-            activeOpacity={0.85}
-          >
-            <View style={[styles.actionIconBox, { backgroundColor: Colors.errorSoft }]}>
-              <ArrowUpRight size={22} color={Colors.error} strokeWidth={2.5} />
-            </View>
-            <Text style={styles.actionBtnLabel}>Withdraw</Text>
-            <Text style={styles.actionBtnSub}>OPay / Bank</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -280,10 +318,53 @@ export default function StudentWalletScreen() {
             activeOpacity={0.85}
           >
             <View style={[styles.actionIconBox, { backgroundColor: Colors.secondarySoft }]}>
-              <Send size={20} color={Colors.secondary} strokeWidth={2.5} />
+              <Send size={18} color={Colors.secondary} strokeWidth={2.5} />
             </View>
             <Text style={styles.actionBtnLabel}>Transfer</Text>
-            <Text style={styles.actionBtnSub}>₦0 Free P2P</Text>
+            <Text style={styles.actionBtnSub}>₦0 to Friend</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.actionBtn}
+            onPress={() => setShowPayFriend(true)}
+            activeOpacity={0.85}
+          >
+            <View style={[styles.actionIconBox, { backgroundColor: '#F3E8FF' }]}>
+              <Heart size={18} color="#8B5CF6" strokeWidth={2.5} />
+            </View>
+            <Text style={styles.actionBtnLabel}>Pay Friend</Text>
+            <Text style={styles.actionBtnSub}>₦100 / Ride</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Action Buttons Row 2: Pay Keke Fee, Withdraw */}
+        <View style={[styles.actionsRow, { marginTop: -4 }]}>
+          <TouchableOpacity
+            style={[styles.actionBtn, { flexDirection: 'row', gap: 10, paddingVertical: 12 }]}
+            onPress={() => setShowPayKekeFee(true)}
+            activeOpacity={0.85}
+          >
+            <View style={[styles.actionIconBox, { backgroundColor: '#FFF7ED', marginBottom: 0 }]}>
+              <Car size={18} color={Colors.secondary} strokeWidth={2.5} />
+            </View>
+            <View style={{ alignItems: 'flex-start' }}>
+              <Text style={styles.actionBtnLabel}>Pay Keke Fee</Text>
+              <Text style={styles.actionBtnSub}>₦100 Ride</Text>
+            </View>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.actionBtn, { flexDirection: 'row', gap: 10, paddingVertical: 12 }]}
+            onPress={() => setShowWithdraw(true)}
+            activeOpacity={0.85}
+          >
+            <View style={[styles.actionIconBox, { backgroundColor: Colors.errorSoft, marginBottom: 0 }]}>
+              <ArrowUpRight size={18} color={Colors.error} strokeWidth={2.5} />
+            </View>
+            <View style={{ alignItems: 'flex-start' }}>
+              <Text style={styles.actionBtnLabel}>Withdraw</Text>
+              <Text style={styles.actionBtnSub}>OPay / Bank</Text>
+            </View>
           </TouchableOpacity>
         </View>
 
@@ -321,7 +402,7 @@ export default function StudentWalletScreen() {
             <Receipt size={36} color={Colors.slate400} strokeWidth={2} style={{ marginBottom: 8 }} />
             <Text style={styles.emptyTitle}>No Transactions Found</Text>
             <Text style={styles.emptySub}>
-              Deposit funds to start taking rides or receiving P2P transfers.
+              Deposit funds to start taking rides, paying keke fees, or receiving transfers from friends.
             </Text>
           </DouCard>
         ) : (
@@ -380,6 +461,16 @@ export default function StudentWalletScreen() {
         visible={showTransfer}
         onClose={() => setShowTransfer(false)}
         onSubmit={handleTransferSubmit}
+      />
+      <PayFriendSheet
+        visible={showPayFriend}
+        onClose={() => setShowPayFriend(false)}
+        onSubmit={handlePayFriendSubmit}
+      />
+      <PayKekeFeeSheet
+        visible={showPayKekeFee}
+        onClose={() => setShowPayKekeFee(false)}
+        onSubmit={handlePayKekeFeeSubmit}
       />
     </SafeAreaView>
   );

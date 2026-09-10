@@ -74,9 +74,9 @@ export function TransferSheet({ visible, onClose, onSubmit }: TransferSheetProps
             }}>
               <Send size={18} color={Colors.secondary} strokeWidth={2.5} />
             </View>
-            <Text style={styles.sheetTitle}>Peer-to-Peer Transfer</Text>
+            <Text style={styles.sheetTitle}>Transfer to Friend</Text>
           </View>
-          <Text style={styles.sheetSubtitle}>Send money to another DOU student or driver with ₦0 fee</Text>
+          <Text style={styles.sheetSubtitle}>Send money to a fellow student or friend with ₦0 fee</Text>
 
           <Text style={styles.sectionTitle}>Recipient</Text>
           <TextInput

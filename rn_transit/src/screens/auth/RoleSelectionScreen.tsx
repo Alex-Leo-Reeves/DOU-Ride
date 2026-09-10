@@ -82,7 +82,7 @@ export default function RoleSelectionScreen() {
                   </View>
                 </View>
                 <Text style={styles.roleSubtitle}>
-                  ₦100 fare • Boarding PINs • School Park virtual queue • ₦0 P2P transfers
+                  ₦100 fare • Boarding PINs • School Park virtual queue • ₦0 friend transfers
                 </Text>
               </View>
               <ChevronRight size={20} color={Colors.slate400} />

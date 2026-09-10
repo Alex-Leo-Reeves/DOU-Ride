@@ -16,72 +16,48 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import {
   ArrowLeft,
-  Car,
   Phone,
-  User,
-  Hash,
-  ShieldCheck,
   Lock,
   Eye,
   EyeOff,
-  Camera,
+  Car,
   AlertCircle,
-  FileCheck,
-  Info,
 } from 'lucide-react-native';
 import { Colors, Spacing, FontSize, BorderRadius, Shadows } from '../../config/theme';
 import { Routes } from '../../config/routes';
 import { useAuthStore } from '../../stores/authStore';
-import { DouCard } from '../../components/DouCard';
 
-export default function DriverRegisterScreen() {
+const HOME_BY_ROLE: Record<string, string> = {
+  driver: Routes.driverTabs,
+};
+
+export default function DriverLoginScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<any>>();
-  const { registerDriver, isLoading, error, clearError } = useAuthStore();
+  const { login, isLoading, error, clearError } = useAuthStore();
 
   const [phone, setPhone] = useState('');
-  const [fullName, setFullName] = useState('');
   const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [vehicleReg, setVehicleReg] = useState('AUTO');
-  const [licensePlate, setLicensePlate] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [localError, setLocalError] = useState('');
 
-  const handleRegister = async () => {
+  const handleLogin = async () => {
     clearError();
     setLocalError('');
 
-    if (
-      !phone.trim() ||
-      !fullName.trim() ||
-      !password.trim() ||
-      !licensePlate.trim()
-    ) {
-      setLocalError('All fields are required to register');
+    if (!phone.trim()) {
+      setLocalError('Please enter your phone number');
       return;
     }
-    if (password !== confirmPassword) {
-      setLocalError('Passwords do not match');
-      return;
-    }
-    if (password.length < 6) {
-      setLocalError('Password must be at least 6 characters');
+    if (!password.trim()) {
+      setLocalError('Please enter your password');
       return;
     }
 
-    const data: Record<string, unknown> = {
-      phone: phone.trim(),
-      fullName: fullName.trim(),
-      kekeRegistration: 'AUTO',
-      licensePlate: licensePlate.trim().toUpperCase(),
-      maxSeats: 4,
-      facePhotoBase64: '',
-      password,
-    };
-
-    const success = await registerDriver(data);
+    const success = await login(phone.trim(), password);
     if (success) {
-      navigation.reset({ index: 0, routes: [{ name: Routes.driverTabs }] });
+      const role = useAuthStore.getState().user?.role ?? 'driver';
+      const homeRoute = HOME_BY_ROLE[role] ?? Routes.driverTabs;
+      navigation.reset({ index: 0, routes: [{ name: homeRoute }] });
     }
   };
 
@@ -97,8 +73,8 @@ export default function DriverRegisterScreen() {
           <ArrowLeft size={20} color={Colors.slate800} />
         </TouchableOpacity>
         <View style={styles.headerTextWrap}>
-          <Text style={styles.headerTitle}>Driver Fleet Onboarding</Text>
-          <Text style={styles.headerSubtitle}>Official DOU commercial transit operator</Text>
+          <Text style={styles.headerTitle}>Driver Sign In</Text>
+          <Text style={styles.headerSubtitle}>DOU Fleet Operator Portal</Text>
         </View>
       </View>
 
@@ -111,37 +87,20 @@ export default function DriverRegisterScreen() {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Compliance Notice */}
-          <DouCard variant="accent" padding={Spacing.md} style={styles.noticeCard}>
-            <View style={styles.noticeRow}>
-              <ShieldCheck size={20} color={Colors.secondary} />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.noticeTitle}>Student Affairs Fleet Mandate</Text>
-                <Text style={styles.noticeSub}>
-                  Max 4 passengers per trip. Fares strictly ₦100 inside campus, ₦200 outside.
-                  Physical gate inspection required at Security Gate 1.
-                </Text>
-              </View>
+          {/* Icon & Welcome */}
+          <View style={styles.logoSection}>
+            <View style={styles.iconCircle}>
+              <Car size={32} color={Colors.secondary} />
             </View>
-          </DouCard>
+            <Text style={styles.welcomeText}>Welcome Back, Driver</Text>
+            <Text style={styles.instructText}>
+              Enter your registered phone number and password to access your fleet terminal
+            </Text>
+          </View>
 
-          {/* Form */}
+          {/* Input Fields */}
           <View style={styles.formContainer}>
-            {/* Full Name */}
-            <Text style={styles.fieldLabel}>Driver Full Legal Name *</Text>
-            <View style={styles.inputWrap}>
-              <User size={18} color={Colors.slate400} />
-              <TextInput
-                style={styles.input}
-                value={fullName}
-                onChangeText={setFullName}
-                placeholder="e.g. Babatunde Raji"
-                placeholderTextColor={Colors.slate400}
-              />
-            </View>
-
-            {/* Phone */}
-            <Text style={styles.fieldLabel}>Phone Number *</Text>
+            <Text style={styles.fieldLabel}>Phone Number</Text>
             <View style={styles.inputWrap}>
               <Phone size={18} color={Colors.slate400} />
               <TextInput
@@ -151,33 +110,11 @@ export default function DriverRegisterScreen() {
                 placeholder="e.g. 08034567890"
                 placeholderTextColor={Colors.slate400}
                 keyboardType="phone-pad"
+                autoCapitalize="none"
               />
             </View>
 
-            {/* Fleet Number Info */}
-            <View style={styles.fleetInfoBox}>
-              <Info size={16} color={Colors.secondary} />
-              <Text style={styles.fleetInfoText}>
-                Your fleet number will be automatically assigned upon registration
-              </Text>
-            </View>
-
-            {/* Plate Number */}
-            <Text style={styles.fieldLabel}>Plate Number *</Text>
-            <View style={styles.inputWrap}>
-              <Car size={16} color={Colors.slate400} />
-              <TextInput
-                style={styles.input}
-                value={licensePlate}
-                onChangeText={setLicensePlate}
-                placeholder="e.g. ASB-492-XA"
-                placeholderTextColor={Colors.slate400}
-                autoCapitalize="characters"
-              />
-            </View>
-
-            {/* Password */}
-            <Text style={styles.fieldLabel}>Password *</Text>
+            <Text style={styles.fieldLabel}>Password</Text>
             <View style={styles.inputWrap}>
               <Lock size={18} color={Colors.slate400} />
               <TextInput
@@ -197,20 +134,7 @@ export default function DriverRegisterScreen() {
               </TouchableOpacity>
             </View>
 
-            {/* Confirm Password */}
-            <Text style={styles.fieldLabel}>Confirm Password *</Text>
-            <View style={styles.inputWrap}>
-              <Lock size={18} color={Colors.slate400} />
-              <TextInput
-                style={styles.input}
-                value={confirmPassword}
-                onChangeText={setConfirmPassword}
-                placeholder="Re-type password"
-                placeholderTextColor={Colors.slate400}
-                secureTextEntry={!showPassword}
-              />
-            </View>
-
+            {/* Error Banner */}
             {displayError ? (
               <View style={styles.errorBox}>
                 <AlertCircle size={16} color={Colors.error} />
@@ -218,25 +142,25 @@ export default function DriverRegisterScreen() {
               </View>
             ) : null}
 
-            {/* Submit */}
+            {/* Sign In Button */}
             <TouchableOpacity
               style={[styles.submitButton, isLoading && { opacity: 0.6 }]}
-              onPress={handleRegister}
+              onPress={handleLogin}
               disabled={isLoading}
               activeOpacity={0.8}
             >
               {isLoading ? (
                 <ActivityIndicator color={Colors.white} />
               ) : (
-                <Text style={styles.submitButtonText}>Register Commercial Operator</Text>
+                <Text style={styles.submitButtonText}>Sign In to Fleet Terminal</Text>
               )}
             </TouchableOpacity>
 
-            {/* Login Link */}
-            <View style={styles.loginRow}>
-              <Text style={styles.loginText}>Already registered as a driver?</Text>
-              <TouchableOpacity onPress={() => navigation.navigate(Routes.driverLogin)}>
-                <Text style={styles.loginLink}>Sign In</Text>
+            {/* Register Link */}
+            <View style={styles.registerRow}>
+              <Text style={styles.registerText}>Don't have an account yet?</Text>
+              <TouchableOpacity onPress={() => navigation.navigate(Routes.driverRegister)}>
+                <Text style={styles.registerLink}>Register as Driver</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -285,29 +209,36 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: Spacing.lg,
   },
-  noticeCard: {
-    marginBottom: Spacing.lg,
-    borderColor: Colors.secondary + '30',
+  logoSection: {
+    alignItems: 'center',
+    marginVertical: Spacing.lg,
   },
-  noticeRow: {
-    flexDirection: 'row',
-    gap: Spacing.sm,
-    alignItems: 'flex-start',
+  iconCircle: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: Colors.secondary + '15',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: Spacing.sm,
+    ...Shadows.sm,
   },
-  noticeTitle: {
-    fontSize: FontSize.xs,
+  welcomeText: {
+    fontSize: FontSize.lg,
     fontFamily: 'Inter_700Bold',
-    color: Colors.secondary,
-    marginBottom: 2,
+    color: Colors.slate900,
   },
-  noticeSub: {
+  instructText: {
     fontSize: FontSize.xs,
     fontFamily: 'Inter_400Regular',
-    color: Colors.slate600,
-    lineHeight: 16,
+    color: Colors.slate500,
+    textAlign: 'center',
+    marginTop: 4,
+    paddingHorizontal: Spacing.md,
   },
   formContainer: {
     gap: Spacing.xs,
+    marginTop: Spacing.sm,
   },
   fieldLabel: {
     fontSize: FontSize.xs,
@@ -337,28 +268,6 @@ const styles = StyleSheet.create({
     color: Colors.slate900,
     padding: 0,
   },
-  twoColumnRow: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  fleetInfoBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    backgroundColor: Colors.secondary + '12',
-    padding: 14,
-    borderRadius: BorderRadius.md,
-    marginVertical: 6,
-    borderWidth: 1,
-    borderColor: Colors.secondary + '25',
-  },
-  fleetInfoText: {
-    flex: 1,
-    fontSize: FontSize.xs,
-    fontFamily: 'Inter_500Medium',
-    color: Colors.secondary,
-    lineHeight: 16,
-  },
   errorBox: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -380,7 +289,7 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.md,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: Spacing.lg,
+    marginTop: Spacing.md,
     ...Shadows.md,
   },
   submitButtonText: {
@@ -388,20 +297,20 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_700Bold',
     color: Colors.white,
   },
-  loginRow: {
+  registerRow: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
     gap: 6,
-    marginTop: Spacing.lg,
-    paddingBottom: Spacing.xl,
+    marginTop: Spacing.md,
+    paddingBottom: Spacing.lg,
   },
-  loginText: {
+  registerText: {
     fontSize: FontSize.xs,
     fontFamily: 'Inter_400Regular',
     color: Colors.slate500,
   },
-  loginLink: {
+  registerLink: {
     fontSize: FontSize.xs,
     fontFamily: 'Inter_700Bold',
     color: Colors.secondary,

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-URL="https://akirabox.com/download/eyJpdiI6Ikx3SkRFRzZHTWhsdjV5dzRhMHRldGc9PSIsInZhbHVlIjoiWitlM25hTlV4SzBuNjUzNnhRQWRlbXBPRjZNczhuR2c2K21NdVA1eUFGYz0iLCJtYWMiOiI0N2Y1YzNmODVhOTQxNTlhZTY4ZTQ0NDkwZmMyMWE5MzA1YzBlNzQ3MjgwMTkwNGFhYmViN2VjMTQwYzVkMjU0IiwidGFnIjoiIn0=/%5BSPSX%5D-Homefront.The.Revolution-CUSA00938-EUR-Game-%285.05%2B%29-PS4.pkg?expiration=1788991534&signature=14d380577144ff5ba585e0f676c1b1aaf7bcf4576b2c17e999d677af47958a64"
+URL="https://vikingfile.com/d/IQTKSKXzB9/%5BSuperPSX%5D-Batman.Return.To.Arkham-CUSA02000-EUR-Game-%285.05%2B%29-PS4.pkg"
 DEST_DIR="/run/media/masteralex/New Volume"
 OUTPUT_FILE="Homefront.The.Revolution-CUSA00938-EUR-Game-PS4.pkg"
 MAX_RETRIES=50

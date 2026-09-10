@@ -605,7 +605,7 @@ export default function StudentHomeScreen() {
             <View style={[styles.shortcutIconBox, { backgroundColor: '#EFF6FF' }]}>
               <CreditCard size={22} color="#2563EB" strokeWidth={2.2} />
             </View>
-            <Text style={styles.shortcutTitle}>P2P Transfer</Text>
+            <Text style={styles.shortcutTitle}>Transfer</Text>
             <Text style={styles.shortcutSub}>Send to Friends</Text>
           </TouchableOpacity>
 

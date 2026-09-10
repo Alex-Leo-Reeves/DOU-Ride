@@ -210,6 +210,42 @@ During this sprint, several critical architectural bugs and bottlenecks were sol
    - **Problem:** `DriverPayLinkScreen.tsx` displayed a static Lucide icon placeholder for the driver's QR code.
    - **Fix:** Integrated `react-native-qrcode-svg` with a dynamic JSON payload containing driver UUID, fleet number, fare amount, trip ID, and timestamp, making the driver's phone physically scannable by passenger devices.
 
+### 4.3 Production-Grade Mobile UI/UX Overhaul, Tab Navigation, and Persistent Session Architecture
+To transition the system from a prototype to a high-end, production-ready campus micro-transit application, the following system-wide refactoring was implemented:
+
+1. **Native Role-Based Bottom Tab Navigation Architecture:**
+   - **Problem:** The mobile application previously operated as a flat stack navigator, creating an overly scrollable, website-like feel that hindered rapid intra-campus transit actions.
+   - **Fix:** Architected three role-specific native Bottom Tab Navigators leveraging `@react-navigation/bottom-tabs`:
+     - **StudentTabNavigator:** 5 core tabs — `Ride` (Booking & live campus map), `Wallet` (Transit pass balance & funding), `Queue` (Live campus keke wait times), `Market` (Campus lost & found and cafeteria), and `Profile` (Settlement account, preferences & security).
+     - **DriverTabNavigator:** 4 core tabs — `Terminal` (Instant QR & PIN fare collection), `Deliveries` (Campus document/food delivery feed), `Lost & Found` (Driver item recovery registry), and `Profile & Bank` (OPay/bank settlement and fleet status).
+     - **AdminTabNavigator:** 5 core tabs — `Dashboard` (Live transit KPIs), `Fleet` (Keke driver clearance), `Students` (Matriculation verification), `Reports` (Campus incident logs), and `Settings` (System controls).
+
+2. **Persistent Session Management (`AsyncStorage`):**
+   - **Problem:** Users were subjected to repeated login credentials requests whenever the app was reloaded or restarted.
+   - **Fix:** Integrated `@react-native-async-storage/async-storage` into `authStore.ts`. User authentication state (`token`, `userId`, `role`, `fullName`) is automatically persisted under `@dou_transit_auth_user`. Upon app boot, a dedicated brand splash screen restores active sessions and routes the student or driver directly to their respective tab dashboard.
+
+3. **Authentic Student Portal Verification & Elimination of Demo Artifacts:**
+   - **Problem:** The authentication screens contained "Demo Fast Autofill" shortcuts and fake portal simulation buttons.
+   - **Fix:** Completely eliminated all demo autofill widgets and mock scripts. In `PortalVerificationScreen.tsx`, matriculation numbers are now checked against real backend records (`checkMatric` API) with authentic validation feedback.
+
+4. **Driver Fleet Registration & Dedicated Driver Login:**
+   - **Problem:** The driver onboarding form confusingly requested bank credentials upfront and exposed a manual fleet number input, while the driver portal redirected drivers to the student login screen.
+   - **Fix:** 
+     - Simplified registration fields: "Phone Number" and "Password".
+     - Removed manual fleet input: Fleet numbers are now sequentially auto-assigned by the backend (`COALESCE(MAX(fleet_number), 0) + 1`).
+     - Engineered a dedicated `DriverLoginScreen.tsx` operating on phone number and password with distinct commercial transit branding and direct routing to `DriverTabs`.
+
+5. **Campus Wallet Terminology & Micro-Payment Extensions:**
+   - **Problem:** Technical "P2P" terminology was confusing to students, and direct Keke fare payments lacked dedicated quick-actions.
+   - **Fix:**
+     - Renamed all "P2P Transfer" touchpoints to intuitive **"Transfer to Friend"** (₦0 fee).
+     - Introduced **`PayFriendSheet`**: Allows students to sponsor fellow students or coursemates for 1, 2, or 4 campus rides with zero transaction fees.
+     - Introduced **`PayKekeFeeSheet`**: Allows instant direct ₦100 (Standard) or ₦150 (Express) fare payments directly to specific Keke fleet numbers (#001, #007, #015, #042) from the wallet.
+
+6. **Unified Settlement & Banking Settings (`SettingsScreen.tsx`):**
+   - **Problem:** Drivers and students had no dedicated screen to configure payout bank accounts or OPay phone numbers after registration.
+   - **Fix:** Developed `SettingsScreen.tsx`, featuring Nigerian bank and fintech selection (OPay, PalmPay, Moniepoint, Kuda, GTBank, Zenith), account number input, transit notification controls, direct Campus Security hotlines, and verified sign-out.
+
 ---
 
 ## CHAPTER FIVE: SUMMARY, CONCLUSION, AND RECOMMENDATIONS

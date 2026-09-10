@@ -24,7 +24,6 @@ import {
   ArrowRight,
   ShieldCheck,
   AlertCircle,
-  Sparkles,
   Phone,
 } from 'lucide-react-native';
 import { Colors, Spacing, FontSize, BorderRadius, Shadows } from '../../config/theme';
@@ -32,9 +31,9 @@ import { Routes } from '../../config/routes';
 import { useAuthStore } from '../../stores/authStore';
 
 const HOME_BY_ROLE: Record<string, string> = {
-  student: Routes.studentHome,
-  driver: Routes.driverPayLink,
-  admin: Routes.adminDashboard,
+  student: Routes.studentTabs,
+  driver: Routes.driverTabs,
+  admin: Routes.adminTabs,
   security: Routes.securityScanner,
   vendor: Routes.vendorOrders,
   developer: Routes.developerMapping,
@@ -72,16 +71,6 @@ export default function LoginScreen() {
       const role = useAuthStore.getState().user?.role ?? 'student';
       const homeRoute = HOME_BY_ROLE[role] ?? Routes.studentHome;
       navigation.reset({ index: 0, routes: [{ name: homeRoute }] });
-    }
-  };
-
-  const fillQuickAccount = (type: 'student' | 'driver') => {
-    if (type === 'student') {
-      setIdentifier('student@dou.edu.ng');
-      setPassword('password123');
-    } else {
-      setIdentifier('08034567890');
-      setPassword('password123');
     }
   };
 
@@ -181,34 +170,14 @@ export default function LoginScreen() {
               )}
             </TouchableOpacity>
 
-            {/* Demo Quick Fill Shortcuts */}
-            <View style={styles.demoSection}>
-              <View style={styles.demoDividerRow}>
-                <View style={styles.demoLine} />
-                <Text style={styles.demoLabel}>Demo Fast Autofill</Text>
-                <View style={styles.demoLine} />
-              </View>
-
-              <View style={styles.demoButtonsRow}>
-                <TouchableOpacity
-                  style={styles.demoPill}
-                  onPress={() => fillQuickAccount('student')}
-                >
-                  <Sparkles size={12} color={Colors.primary} />
-                  <Text style={styles.demoPillText}>Student Demo</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.demoPill}
-                  onPress={() => fillQuickAccount('driver')}
-                >
-                  <Sparkles size={12} color={Colors.secondary} />
-                  <Text style={[styles.demoPillText, { color: Colors.secondary }]}>
-                    Driver #042 Demo
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </View>
+            {/* Driver Login Option */}
+            <TouchableOpacity
+              style={styles.driverPortalLink}
+              onPress={() => navigation.navigate(Routes.driverLogin)}
+            >
+              <Phone size={15} color={Colors.secondary} />
+              <Text style={styles.driverPortalText}>Driver? Sign in via Driver Portal</Text>
+            </TouchableOpacity>
 
             {/* Portal Verification Alternative */}
             <TouchableOpacity
@@ -358,45 +327,22 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_700Bold',
     color: Colors.white,
   },
-  demoSection: {
-    marginVertical: Spacing.md,
-  },
-  demoDividerRow: {
+  driverPortalLink: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginBottom: Spacing.sm,
-  },
-  demoLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: Colors.slate200,
-  },
-  demoLabel: {
-    fontSize: 10,
-    fontFamily: 'Inter_600SemiBold',
-    color: Colors.slate400,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  demoButtonsRow: {
-    flexDirection: 'row',
     justifyContent: 'center',
-    gap: 10,
+    gap: 8,
+    paddingVertical: 12,
+    backgroundColor: '#FFF7ED',
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    borderColor: '#FED7AA',
+    marginTop: Spacing.sm,
   },
-  demoPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: BorderRadius.full,
-    backgroundColor: Colors.slate100,
-  },
-  demoPillText: {
+  driverPortalText: {
     fontSize: FontSize.xs,
     fontFamily: 'Inter_600SemiBold',
-    color: Colors.primary,
+    color: Colors.secondary,
   },
   portalVerifyLink: {
     flexDirection: 'row',

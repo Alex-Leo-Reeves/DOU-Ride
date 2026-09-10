@@ -122,7 +122,7 @@ export default function StudentPayScreen() {
             </View>
             <View style={styles.receiptRow}>
               <Text style={styles.receiptLabel}>Method</Text>
-              <Text style={styles.receiptValue}>Instant P2P Handshake</Text>
+              <Text style={styles.receiptValue}>Instant Digital Handshake</Text>
             </View>
             <View style={styles.receiptDivider} />
             <View style={styles.receiptRow}>
