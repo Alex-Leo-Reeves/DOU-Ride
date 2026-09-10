@@ -37,7 +37,7 @@ const BANKS = [
 
 export function WithdrawSheet({ visible, onClose, onSubmit, currentBalance }: WithdrawSheetProps) {
   const [amount, setAmount] = useState('');
-  const [selectedBank, setSelectedBank] = useState<{ code: string; name: string } | null>(BANKS[0]);
+  const [selectedBank, setSelectedBank] = useState<{ code: string; name: string; supportsVerification?: boolean } | null>(BANKS[0]);
   const [accountNumber, setAccountNumber] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [showBankPicker, setShowBankPicker] = useState(false);
