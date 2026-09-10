@@ -712,59 +712,67 @@ fun Route.walletRoutes() {
                 val pendingStmt = conn.prepareStatement("SELECT id, reference, user_id, amount, fee FROM wallet_transactions WHERE type = 'deposit' AND status = 'pending' AND created_at < now() - interval '5 minutes' ORDER BY created_at ASC LIMIT 10")
                 val pendingRs = pendingStmt.executeQuery()
 
-                val results = mutableListOf<Map<String, Any?>>()
-                while (pendingRs.next()) {
-                    val txRef = pendingRs.getString("reference")
-                    val txId = pendingRs.getString("id")
-                    val userId = pendingRs.getString("user_id")
-                    val totalAmount = pendingRs.getDouble("amount")
-                    val fee = pendingRs.getDouble("fee")
-                    val netAmount = totalAmount - fee
+                val results = buildJsonArray {
+                    while (pendingRs.next()) {
+                        val txRef = pendingRs.getString("reference")
+                        val txId = pendingRs.getString("id")
+                        val userId = pendingRs.getString("user_id")
+                        val totalAmount = pendingRs.getDouble("amount")
+                        val fee = pendingRs.getDouble("fee")
+                        val netAmount = totalAmount - fee
 
-                    var flwStatus: String? = null
-                    try {
-                        val verifyResp = httpClient.get("https://api.flutterwave.com/v3/transactions/verify_by_reference?tx_ref=$txRef") {
-                            header(HttpHeaders.Authorization, "Bearer ${AppConfig.flutterwaveSecretKey}")
+                        var flwStatus: String? = null
+                        try {
+                            val verifyResp = httpClient.get("https://api.flutterwave.com/v3/transactions/verify_by_reference?tx_ref=$txRef") {
+                                header(HttpHeaders.Authorization, "Bearer ${AppConfig.flutterwaveSecretKey}")
+                            }
+                            if (verifyResp.status.isSuccess()) {
+                                val verifyJson = json.parseToJsonElement(verifyResp.bodyAsText()).jsonObject
+                                flwStatus = verifyJson["data"]?.jsonObject?.get("status")?.jsonPrimitive?.contentOrNull
+                            }
+                        } catch (e: Exception) {
+                            println("[WALLET] Reconcile check failed for $txRef: ${e.message}")
                         }
-                        if (verifyResp.status.isSuccess()) {
-                            val verifyJson = json.parseToJsonElement(verifyResp.bodyAsText()).jsonObject
-                            flwStatus = verifyJson["data"]?.jsonObject?.get("status")?.jsonPrimitive?.contentOrNull
+
+                        val newStatus = when {
+                            flwStatus.equals("successful", ignoreCase = true) -> "completed"
+                            flwStatus.equals("cancelled", ignoreCase = true) -> "failed"
+                            flwStatus.equals("failed", ignoreCase = true) -> "failed"
+                            else -> null
                         }
-                    } catch (e: Exception) {
-                        println("[WALLET] Reconcile check failed for $txRef: ${e.message}")
-                    }
 
-                    val newStatus = when {
-                        flwStatus.equals("successful", ignoreCase = true) -> "completed"
-                        flwStatus.equals("cancelled", ignoreCase = true) -> "failed"
-                        flwStatus.equals("failed", ignoreCase = true) -> "failed"
-                        else -> null
-                    }
+                        if (newStatus != null) {
+                            if (newStatus == "completed") {
+                                val balStmt = conn.prepareStatement("SELECT COALESCE(SUM(CASE WHEN type IN ('deposit','refund','transfer_in','ride_payout') THEN amount WHEN type IN ('withdrawal','ride_payment','penalty','platform_fee','transfer_out') THEN -amount ELSE 0 END), 0.00) AS balance FROM wallet_transactions WHERE user_id = ?::uuid AND status = 'completed'")
+                                balStmt.setString(1, userId)
+                                val balRs = balStmt.executeQuery()
+                                val currentBalance = if (balRs.next()) balRs.getDouble("balance") else 0.0
+                                val newBalance = currentBalance + netAmount
 
-                    if (newStatus != null) {
-                        if (newStatus == "completed") {
-                            val balStmt = conn.prepareStatement("SELECT COALESCE(SUM(CASE WHEN type IN ('deposit','refund','transfer_in','ride_payout') THEN amount WHEN type IN ('withdrawal','ride_payment','penalty','platform_fee','transfer_out') THEN -amount ELSE 0 END), 0.00) AS balance FROM wallet_transactions WHERE user_id = ?::uuid AND status = 'completed'")
-                            balStmt.setString(1, userId)
-                            val balRs = balStmt.executeQuery()
-                            val currentBalance = if (balRs.next()) balRs.getDouble("balance") else 0.0
-                            val newBalance = currentBalance + netAmount
+                                val updateStmt = conn.prepareStatement("UPDATE wallet_transactions SET status = 'completed', balance_before = ?, balance_after = ?, updated_at = now() WHERE id = ?::uuid")
+                                updateStmt.setDouble(1, currentBalance)
+                                updateStmt.setDouble(2, newBalance)
+                                updateStmt.setString(3, txId)
+                                updateStmt.executeUpdate()
+                            } else {
+                                val updateStmt = conn.prepareStatement("UPDATE wallet_transactions SET status = 'failed', updated_at = now() WHERE id = ?::uuid")
+                                updateStmt.setString(1, txId)
+                                updateStmt.executeUpdate()
+                            }
+                        }
 
-                            val updateStmt = conn.prepareStatement("UPDATE wallet_transactions SET status = 'completed', balance_before = ?, balance_after = ?, updated_at = now() WHERE id = ?::uuid")
-                            updateStmt.setDouble(1, currentBalance)
-                            updateStmt.setDouble(2, newBalance)
-                            updateStmt.setString(3, txId)
-                            updateStmt.executeUpdate()
-                        } else {
-                            val updateStmt = conn.prepareStatement("UPDATE wallet_transactions SET status = 'failed', updated_at = now() WHERE id = ?::uuid")
-                            updateStmt.setString(1, txId)
-                            updateStmt.executeUpdate()
+                        addJsonObject {
+                            put("tx_ref", txRef)
+                            put("flutterwave_status", flwStatus)
+                            put("new_status", newStatus)
                         }
                     }
-
-                    results.add(mapOf("tx_ref" to txRef, "flutterwave_status" to flwStatus, "new_status" to newStatus))
                 }
 
-                call.respond(mapOf("reconciled" to results.size, "results" to results))
+                call.respond(buildJsonObject {
+                    put("reconciled", results.size)
+                    put("results", results)
+                })
             } catch (e: Exception) {
                 println("[WALLET] Reconcile error: ${e.message}")
                 call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Reconciliation failed", e.message))
