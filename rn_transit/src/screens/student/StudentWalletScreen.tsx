@@ -60,6 +60,7 @@ export default function StudentWalletScreen() {
     fetchBalance,
     deposit,
     verifyDeposit,
+    cancelDeposit,
     withdraw,
     transfer,
   } = useWalletStore();
@@ -96,13 +97,32 @@ export default function StudentWalletScreen() {
 
         // Automatic verification poll on browser return
         if (res.transactionRef) {
-          const verifyResult = await verifyDeposit(res.transactionRef, user?.userId ?? '', user?.token);
-          if (verifyResult.verified) {
-            Alert.alert(
-              'Deposit Confirmed! 🎉',
-              `₦${verifyResult.netAmount?.toLocaleString() ?? amount} has been added to your DOU Transit digital pass.`
-            );
-          }
+          // Poll for verification up to 3 times with delay
+          let attempts = 0;
+          const maxAttempts = 3;
+          const pollInterval = 3000;
+
+          const pollVerification = async () => {
+            attempts++;
+            const verifyResult = await verifyDeposit(res.transactionRef, user?.userId ?? '', user?.token);
+            if (verifyResult.verified) {
+              Alert.alert(
+                'Deposit Confirmed! 🎉',
+                `₦${verifyResult.netAmount?.toLocaleString() ?? amount} has been added to your DOU Transit digital pass.`
+              );
+              return true;
+            } else if (attempts < maxAttempts) {
+              // Retry after delay
+              setTimeout(pollVerification, pollInterval);
+            } else {
+              Alert.alert(
+                'Payment Verification Pending',
+                `Your payment is being processed. Reference: ${res.transactionRef.substring(0, 14)}...\n\nYour wallet will be credited automatically once payment settles.`
+              );
+            }
+          };
+
+          setTimeout(pollVerification, pollInterval);
         }
       }
       return res?.transactionRef ?? null;

@@ -13,6 +13,7 @@ interface WalletState {
   fetchBalance: (userId: string, token?: string | null) => Promise<void>;
   deposit: (amount: number, userId: string, token?: string | null) => Promise<{ paymentUrl: string; transactionRef: string } | null>;
   verifyDeposit: (txRef: string, userId: string, token?: string | null) => Promise<{ verified: boolean; netAmount?: number; message?: string }>;
+  cancelDeposit: (txRef: string, userId: string, token?: string | null) => Promise<boolean>;
   withdraw: (data: {
     bankCode: string;
     bankName: string;
@@ -91,6 +92,21 @@ export const useWalletStore = create<WalletState>((set, get) => ({
     } catch (e: any) {
       set({ isLoading: false, error: e.message });
       return { verified: false, message: e.message };
+    }
+  },
+
+  cancelDeposit: async (txRef, userId, token) => {
+    try {
+      const res = await api.post('/api/wallet/deposit/cancel', { transactionRef: txRef, userId }, token);
+      if (res.error) {
+        console.warn('[WALLET] Cancel deposit failed:', res.error);
+        return false;
+      }
+      await get().fetchBalance(userId, token);
+      return true;
+    } catch (e: any) {
+      console.warn('[WALLET] Cancel deposit error:', e.message);
+      return false;
     }
   },
 

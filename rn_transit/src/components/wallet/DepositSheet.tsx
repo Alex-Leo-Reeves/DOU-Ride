@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,7 +9,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import { ArrowDownLeft, ShieldCheck, Check } from 'lucide-react-native';
+import { ArrowDownLeft, ShieldCheck } from 'lucide-react-native';
 import { Colors } from '../../config/theme';
 import { walletStyles as styles } from './WalletStyles';
 import { FeeRow } from './Shared';
@@ -27,6 +27,13 @@ export function DepositSheet({ visible, onClose, onSubmit }: DepositSheetProps) 
   const fee = 10;
   const numAmount = parseFloat(amount) || 0;
 
+  useEffect(() => {
+    if (visible) {
+      setAmount('');
+      setIsProcessing(false);
+    }
+  }, [visible]);
+
   const handleSubmit = async () => {
     if (numAmount < 100) {
       Alert.alert('Minimum Amount', 'Minimum deposit is ₦100 to cover gateway processing.');
@@ -38,13 +45,20 @@ export function DepositSheet({ visible, onClose, onSubmit }: DepositSheetProps) 
       setIsProcessing(false);
       if (result) {
         Alert.alert(
-          'Flutterwave Checkout Ready',
-          `Payment Reference: ${result.substring(0, 14)}...\nYour wallet will be credited ₦${numAmount.toLocaleString()} upon payment.`,
-          [{ text: 'Proceed', onPress: onClose }]
+          'Payment Initiated',
+          `Reference: ${result.substring(0, 14)}...\n\nComplete the payment in your browser. Your wallet will be credited automatically once payment is confirmed.`,
+          [{ text: 'OK', onPress: onClose }]
+        );
+      } else {
+        Alert.alert(
+          'Payment Failed',
+          'Could not initiate payment. Please check your connection and try again.',
+          [{ text: 'OK', onPress: onClose }]
         );
       }
     } catch {
       setIsProcessing(false);
+      Alert.alert('Error', 'An unexpected error occurred. Please try again.');
     }
   };
 
@@ -121,7 +135,7 @@ export function DepositSheet({ visible, onClose, onSubmit }: DepositSheetProps) 
             activeOpacity={0.85}
           >
             <Text style={styles.primaryBtnText}>
-              {isProcessing ? 'Connecting Flutterwave...' : `PAY ₦${(numAmount + fee).toLocaleString()}`}
+              {isProcessing ? 'Connecting to Flutterwave...' : `PAY ₦${(numAmount + fee).toLocaleString()}`}
             </Text>
           </TouchableOpacity>
 

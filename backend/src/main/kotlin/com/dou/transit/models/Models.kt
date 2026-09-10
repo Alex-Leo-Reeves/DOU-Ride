@@ -178,6 +178,19 @@ data class FlutterwaveWebhookData(
     val processor_response: String? = null
 )
 
+@Serializable
+data class CancelDepositRequest(
+    val transactionRef: String,
+    val userId: String? = null
+)
+
+@Serializable
+data class ReconcileDepositRequest(
+    val transactionRef: String? = null,
+    val userId: String? = null,
+    val maxAgeMinutes: Int? = 30
+)
+
 // ============================================================
 // RIDE MODELS
 // ============================================================
