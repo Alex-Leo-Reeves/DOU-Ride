@@ -19,6 +19,7 @@ interface WithdrawSheetProps {
   visible: boolean;
   onClose: () => void;
   onSubmit: (data: { bankCode: string; bankName: string; accountNumber: string; amount: number }) => Promise<boolean>;
+  currentBalance: number;
 }
 
 const BANKS = [
@@ -35,7 +36,7 @@ const BANKS = [
   { code: '000009', name: 'Wema Bank / ALAT' },
 ];
 
-export function WithdrawSheet({ visible, onClose, onSubmit }: WithdrawSheetProps) {
+export function WithdrawSheet({ visible, onClose, onSubmit, currentBalance }: WithdrawSheetProps) {
   const [amount, setAmount] = useState('');
   const [selectedBank, setSelectedBank] = useState<{ code: string; name: string } | null>(BANKS[0]);
   const [accountNumber, setAccountNumber] = useState('');
@@ -61,6 +62,10 @@ export function WithdrawSheet({ visible, onClose, onSubmit }: WithdrawSheetProps
     const numAmount = parseFloat(amount) || 0;
     if (numAmount <= 0) {
       Alert.alert('Invalid Amount', 'Please enter a valid amount to withdraw.');
+      return;
+    }
+    if (numAmount > currentBalance) {
+      Alert.alert('Insufficient Balance', `Your available balance is ₦${currentBalance.toLocaleString()}. You cannot withdraw more than this amount.`);
       return;
     }
     if (!selectedBank) {

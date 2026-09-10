@@ -476,6 +476,7 @@ export default function StudentWalletScreen() {
         visible={showWithdraw}
         onClose={() => setShowWithdraw(false)}
         onSubmit={handleWithdrawSubmit}
+        currentBalance={balance}
       />
       <TransferSheet
         visible={showTransfer}
