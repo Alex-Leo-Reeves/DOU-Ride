@@ -73,12 +73,12 @@ fun Application.module() {
                     dbOk = !conn.isClosed
                 }
             } catch (_: Exception) {}
-            call.respond(mapOf(
-                "status" to "ok",
-                "version" to "1.0.0",
-                "service" to "DOU Transit Production API",
-                "database" to if (dbOk) "connected" else "connecting",
-                "timestamp" to System.currentTimeMillis()
+            call.respond(HealthResponse(
+                status = "ok",
+                version = "1.0.1",
+                service = "DOU Transit Production API",
+                database = if (dbOk) "connected" else "connecting",
+                timestamp = System.currentTimeMillis()
             ))
         }
 

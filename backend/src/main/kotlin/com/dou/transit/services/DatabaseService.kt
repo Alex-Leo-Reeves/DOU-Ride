@@ -16,9 +16,16 @@ object DatabaseService {
     private var initError: String? = null
 
     init {
+        initPool()
+    }
+
+    @Synchronized
+    fun initPool() {
+        if (dataSource != null && !dataSource!!.isClosed) return
         try {
             val config = HikariConfig().apply {
                 val url = AppConfig.supabaseDbUrl
+                    .replace("aws-0-eu-west-1.pooler.supabase.com", "aws-0-eu-west-3.pooler.supabase.com")
                 println("[DB] Raw DATABASE_URL (masked): ${url.replace(Regex("password=[^&]*"), "password=***")}")
 
                 if (url.contains("@")) {
@@ -89,6 +96,7 @@ object DatabaseService {
                 driverClassName = "org.postgresql.Driver"
             }
             dataSource = HikariDataSource(config)
+            initError = null
             println("[DB] Connection pool initialized successfully")
         } catch (e: Exception) {
             println("[DB] Failed to initialize connection pool: ${e.message}")
@@ -98,9 +106,14 @@ object DatabaseService {
     }
 
     fun getConnection(): Connection {
+        if (dataSource == null || dataSource!!.isClosed) {
+            initPool()
+        }
         val ds = dataSource ?: throw IllegalStateException("Database failed to initialize: $initError")
         return ds.connection
     }
+
+    fun getInitError(): String? = initError
 
     fun close() {
         dataSource?.close()

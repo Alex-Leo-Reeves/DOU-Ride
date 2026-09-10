@@ -84,7 +84,7 @@ data class PortalCheckRequest(val matricNumber: String)
 // ============================================================
 
 @Serializable
-data class DepositRequest(val amount: Double)
+data class DepositRequest(val amount: Double, val userId: String? = null)
 
 @Serializable
 data class DepositResponse(val paymentUrl: String, val transactionRef: String)
@@ -101,7 +101,46 @@ data class WithdrawRequest(
 data class TransferRequest(val recipientId: String, val amount: Double, val note: String? = null)
 
 @Serializable
+data class HealthResponse(
+    val status: String,
+    val version: String,
+    val service: String,
+    val database: String,
+    val timestamp: Long
+)
+
+@Serializable
 data class WalletResponse(val balance: Double, val transactions: List<TransactionSummary>)
+
+@Serializable
+data class WalletBalanceResponse(
+    val balance: Double,
+    val pendingBalance: Double,
+    val transactions: List<WalletTransactionItem>
+)
+
+@Serializable
+data class WalletTransactionItem(
+    val id: String,
+    val type: String,
+    val amount: Double,
+    val fee: Double = 0.0,
+    val balance_before: Double = 0.0,
+    val balance_after: Double = 0.0,
+    val status: String,
+    val reference: String? = null,
+    val description: String? = null,
+    val created_at: String? = null
+)
+
+@Serializable
+data class VerifyDepositResponse(
+    val verified: Boolean,
+    val status: String,
+    val message: String? = null,
+    val netAmount: Double? = null,
+    val newBalance: Double? = null
+)
 
 @Serializable
 data class TransactionSummary(

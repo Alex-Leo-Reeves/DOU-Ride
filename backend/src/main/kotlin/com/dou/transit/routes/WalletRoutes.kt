@@ -71,30 +71,31 @@ fun Route.walletRoutes() {
                 txStmt.setString(1, userId)
                 val txRs = txStmt.executeQuery()
 
-                val transactions = mutableListOf<Map<String, Any?>>()
+                val transactions = mutableListOf<WalletTransactionItem>()
                 while (txRs.next()) {
-                    transactions.add(mapOf(
-                        "id" to txRs.getString("id"),
-                        "type" to txRs.getString("type"),
-                        "amount" to txRs.getDouble("amount"),
-                        "fee" to txRs.getDouble("fee"),
-                        "balance_before" to txRs.getDouble("balance_before"),
-                        "balance_after" to txRs.getDouble("balance_after"),
-                        "status" to txRs.getString("status"),
-                        "reference" to txRs.getString("reference"),
-                        "description" to txRs.getString("description"),
-                        "created_at" to txRs.getTimestamp("created_at").toInstant().toString()
+                    transactions.add(WalletTransactionItem(
+                        id = txRs.getString("id"),
+                        type = txRs.getString("type"),
+                        amount = txRs.getDouble("amount"),
+                        fee = txRs.getDouble("fee"),
+                        balance_before = txRs.getDouble("balance_before"),
+                        balance_after = txRs.getDouble("balance_after"),
+                        status = txRs.getString("status"),
+                        reference = txRs.getString("reference"),
+                        description = txRs.getString("description"),
+                        created_at = txRs.getTimestamp("created_at")?.toInstant()?.toString()
                     ))
                 }
 
-                call.respond(mapOf(
-                    "balance" to balance,
-                    "pendingBalance" to pendingBalance,
-                    "transactions" to transactions
+                call.respond(WalletBalanceResponse(
+                    balance = balance,
+                    pendingBalance = pendingBalance,
+                    transactions = transactions
                 ))
             } catch (e: Exception) {
                 println("[WALLET] Error fetching balance: ${e.message}")
-                call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to fetch balance"))
+                e.printStackTrace()
+                call.respond(HttpStatusCode.InternalServerError, ErrorResponse(e.message ?: "Failed to fetch balance"))
             } finally {
                 conn.close()
             }
@@ -113,6 +114,7 @@ fun Route.walletRoutes() {
             }
 
             val userId = call.request.headers["X-User-Id"]
+                ?: req.userId
                 ?: return@post call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Not authenticated"))
 
             val totalAmount = req.amount + AppConfig.platformFeeNaira
@@ -273,11 +275,11 @@ fun Route.walletRoutes() {
                 val netAmount = totalAmount - fee
 
                 if (status == "completed") {
-                    return@get call.respond(mapOf(
-                        "verified" to true,
-                        "status" to "completed",
-                        "netAmount" to netAmount,
-                        "message" to "Deposit already credited"
+                    return@get call.respond(VerifyDepositResponse(
+                        verified = true,
+                        status = "completed",
+                        netAmount = netAmount,
+                        message = "Deposit already credited"
                     ))
                 }
 
@@ -302,10 +304,10 @@ fun Route.walletRoutes() {
                 }
 
                 if (!isSuccessful) {
-                    return@get call.respond(mapOf(
-                        "verified" to false,
-                        "status" to status,
-                        "message" to "Payment has not yet settled with Flutterwave. Please check back shortly."
+                    return@get call.respond(VerifyDepositResponse(
+                        verified = false,
+                        status = status,
+                        message = "Payment has not yet settled with Flutterwave. Please check back shortly."
                     ))
                 }
 
@@ -349,12 +351,12 @@ fun Route.walletRoutes() {
 
                 val newBalance = currentBalance + netAmount
 
-                call.respond(mapOf(
-                    "verified" to true,
-                    "status" to "completed",
-                    "netAmount" to netAmount,
-                    "newBalance" to newBalance,
-                    "message" to "Wallet credited successfully with ₦${netAmount.toInt()}"
+                call.respond(VerifyDepositResponse(
+                    verified = true,
+                    status = "completed",
+                    netAmount = netAmount,
+                    newBalance = newBalance,
+                    message = "Wallet credited successfully with ₦${netAmount.toInt()}"
                 ))
             } catch (e: Exception) {
                 println("[WALLET] Verify deposit error: ${e.message}")
