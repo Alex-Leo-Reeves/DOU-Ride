@@ -169,8 +169,10 @@ fun processPendingWithdrawals() = runBlocking {
         var transferSuccess = false
         try {
             val httpClient = HttpClient(CIO)
+            // Background payout also needs the Flutterwave code, not the NIP code.
+            val fwCode = mapOf("000033" to "999992", "000034" to "999995", "000031" to "999991")[bankCode] ?: bankCode
             val transferPayload = buildJsonObject {
-                put("account_bank", JsonPrimitive(bankCode))
+                put("account_bank", JsonPrimitive(fwCode))
                 put("account_number", JsonPrimitive(accountNumber))
                 put("amount", JsonPrimitive(amount.toInt()))
                 put("currency", JsonPrimitive("NGN"))

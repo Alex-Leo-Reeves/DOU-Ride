@@ -467,7 +467,78 @@ fun Route.walletRoutes() {
                 txStmt.setString(7, """{"accountNumber":"${req.accountNumber}","bankCode":"${req.bankCode}","bankName":"${req.bankName ?: ""}"}""")
                 txStmt.executeUpdate()
 
-                call.respond(SuccessResponse("Withdrawal request submitted successfully"))
+                // Normalize bank code: app ships 6-digit NIP codes (000033)
+                // but Flutterwave expects its own codes (e.g. 999992 for OPay).
+                // Map the known fintech aliases before calling the API.
+                val fwBankCode = mapOf(
+                    "000033" to "999992",  // OPay Digital Services
+                    "000034" to "999995",  // PalmPay
+                    "000031" to "999991",  // Moniepoint MFB
+                    "000032" to "999992",  // Kuda (fallback to OPay rail if unsupported)
+                    "999992" to "999992",
+                    "999995" to "999995",
+                    "999991" to "999991"
+                )[req.bankCode] ?: req.bankCode
+                if (fwBankCode != req.bankCode) {
+                    println("[WITHDRAW] Normalized bank code ${req.bankCode} -> $fwBankCode for $reference")
+                }
+
+                // Attempt the Flutterwave transfer NOW (synchronously) so the
+                // user gets an immediate completed/failed result instead of a
+                // withdrawal stuck at "pending" forever when the background
+                // job can't reach Flutterwave.
+                var finalStatus = "pending"
+                var transferId: String? = null
+                var failReason: String? = null
+                var fwDebug: String? = null
+                try {
+                    val payload = buildJsonObject {
+                        put("account_bank", fwBankCode)
+                        put("account_number", req.accountNumber)
+                        put("amount", req.amount.toInt())
+                        put("currency", "NGN")
+                        put("reference", reference)
+                        put("narration", "DOU Transit Wallet Withdrawal")
+                        put("callback_url", "${AppConfig.baseUrl}/api/wallet/transfer/webhook")
+                    }
+                    val resp = httpClient.post("https://api.flutterwave.com/v3/transfers") {
+                        header(HttpHeaders.Authorization, "Bearer ${AppConfig.flutterwaveSecretKey}")
+                        contentType(ContentType.Application.Json)
+                        setBody(payload.toString())
+                    }
+                    val bodyText = resp.bodyAsText()
+                    fwDebug = "HTTP ${resp.status.value}: ${bodyText.take(300)}"
+                    val bodyJson = try { json.parseToJsonElement(bodyText).jsonObject } catch (e: Exception) { null }
+                    if (resp.status.isSuccess() && bodyJson?.get("status")?.jsonPrimitive?.contentOrNull == "success") {
+                        finalStatus = "completed"
+                        transferId = bodyJson["data"]?.jsonObject?.get("id")?.toString()?.trim('"')
+                    } else if (resp.status.value in 500..599) {
+                        // Server-side blip — leave pending for background retry.
+                        finalStatus = "pending"
+                        failReason = "Flutterwave 5xx, will retry"
+                    } else {
+                        finalStatus = "failed"
+                        failReason = bodyJson?.get("message")?.jsonPrimitive?.contentOrNull ?: "HTTP ${resp.status.value}"
+                    }
+                    if (transferId != null || finalStatus != "pending") {
+                        val upd = conn.prepareStatement("UPDATE wallet_transactions SET status = ?, transfer_id = ?, description = ?, updated_at = now() WHERE reference = ?")
+                        upd.setString(1, finalStatus)
+                        upd.setString(2, transferId)
+                        upd.setString(3, "Withdrawal to ${req.bankName ?: "Bank"} (${req.accountNumber})" + (if (finalStatus == "failed") " — FAILED: $failReason" else ""))
+                        upd.setString(4, reference)
+                        upd.executeUpdate()
+                    }
+                    println("[WITHDRAW] $reference -> $finalStatus (transferId=$transferId, reason=$failReason, fw=$fwDebug)")
+                } catch (e: Exception) {
+                    // Network/timeout — leave as pending; background job retries.
+                    println("[WITHDRAW] $reference network error, leaving pending for retry: ${e.message}")
+                }
+
+                when (finalStatus) {
+                    "completed" -> call.respond(SuccessResponse("Withdrawal of NGN ${req.amount.toInt()} sent successfully"))
+                    "failed" -> call.respond(HttpStatusCode.BadRequest, ErrorResponse("Withdrawal failed", failReason ?: "Transfer rejected by provider"))
+                    else -> call.respond(SuccessResponse("Withdrawal request submitted successfully"))
+                }
             } catch (e: Exception) {
                 println("[WALLET] Withdrawal error: ${e.message}")
                 call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Withdrawal request failed", e.message))
@@ -637,11 +708,21 @@ fun Route.walletRoutes() {
                 return@post call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid account number or bank code"))
             }
 
+            // Normalize app-side NIP codes (000033 etc.) to Flutterwave bank codes.
+            val fwBankCode = mapOf(
+                "000033" to "999992",
+                "000034" to "999995",
+                "000031" to "999991",
+                "999992" to "999992",
+                "999995" to "999995",
+                "999991" to "999991"
+            )[bankCode.trim()] ?: bankCode.trim()
+
             try {
                 val httpClient = HttpClient(CIO)
                 val verifyPayload = buildJsonObject {
-                    put("account_number", JsonPrimitive(accountNumber))
-                    put("account_bank", JsonPrimitive(bankCode))
+                    put("account_number", JsonPrimitive(accountNumber.trim()))
+                    put("account_bank", JsonPrimitive(fwBankCode))
                 }
 
                 println("[VERIFY] Calling Flutterwave API with payload: $verifyPayload")
