@@ -91,12 +91,15 @@ fun Application.module() {
 }
 
 fun Application.startBackgroundJobs() {
-    val scheduler = Executors.newScheduledThreadPool(2)
+    val scheduler = Executors.newScheduledThreadPool(3)
     scheduler.scheduleAtFixedRate({
         try { reconcilePendingDeposits() } catch (e: Exception) { println("[BACKGROUND] Reconcile error: ${e.message}") }
     }, 1, 2, TimeUnit.MINUTES)
     scheduler.scheduleAtFixedRate({
+        try { autoClearStuckWithdrawals() } catch (e: Exception) { println("[BACKGROUND] Auto-clear error: ${e.message}") }
+    }, 1, 5, TimeUnit.MINUTES)
+    scheduler.scheduleAtFixedRate({
         try { processPendingWithdrawals() } catch (e: Exception) { println("[BACKGROUND] Payout error: ${e.message}") }
     }, 2, 5, TimeUnit.MINUTES)
-    println("[BACKGROUND] Jobs started: deposit reconciliation (2min), payout processing (5min)")
+    println("[BACKGROUND] Jobs started: deposit reconciliation (2min), auto-clear (5min), payout processing (5min)")
 }

@@ -21,6 +21,29 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 
+/**
+ * Auto-clears pending withdrawals that have been stuck for more than 10 minutes
+ */
+fun autoClearStuckWithdrawals() {
+    val conn = DatabaseService.getConnection()
+    try {
+        val clearStmt = conn.prepareStatement("""
+            UPDATE wallet_transactions 
+            SET status = 'failed', updated_at = now()
+            WHERE type = 'withdrawal' AND status = 'pending'
+            AND created_at < now() - interval '10 minutes'
+        """.trimIndent())
+        val cleared = clearStmt.executeUpdate()
+        if (cleared > 0) {
+            println("[AUTO-CLEAR] Cleared $cleared stuck pending withdrawals")
+        }
+    } catch (e: Exception) {
+        println("[AUTO-CLEAR] Error: ${e.message}")
+    } finally {
+        conn.close()
+    }
+}
+
 fun reconcilePendingDeposits() = runBlocking {
     val conn = DatabaseService.getConnection()
     try {
