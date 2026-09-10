@@ -1,7 +1,6 @@
 package com.dou.transit.models
 
 import kotlinx.serialization.Serializable
-import java.util.UUID
 
 // ============================================================
 // ENUMS
@@ -49,8 +48,8 @@ data class RegisterDriverRequest(
     val phone: String,
     val kekeRegistration: String,
     val licensePlate: String,
-    val maxSeats: Int,
-    val facePhotoBase64: String,
+    val maxSeats: Int = 3,
+    val facePhotoBase64: String? = null,
     val password: String
 )
 
@@ -79,6 +78,16 @@ data class PortalScrapeResult(
 @Serializable
 data class PortalCheckRequest(val matricNumber: String)
 
+@Serializable
+data class CheckMatricResponse(
+    val exists: Boolean,
+    val email: String? = null,
+    val fullName: String? = null,
+    val department: String? = null,
+    val faculty: String? = null,
+    val error: String? = null
+)
+
 // ============================================================
 // WALLET MODELS
 // ============================================================
@@ -94,23 +103,25 @@ data class WithdrawRequest(
     val bankCode: String,
     val accountNumber: String,
     val amount: Double,
-    val bankName: String? = null
+    val bankName: String? = null,
+    val userId: String? = null
 )
 
 @Serializable
-data class TransferRequest(val recipientId: String, val amount: Double, val note: String? = null)
-
-@Serializable
-data class HealthResponse(
-    val status: String,
-    val version: String,
-    val service: String,
-    val database: String,
-    val timestamp: Long
+data class TransferRequest(
+    val recipientId: String,
+    val amount: Double,
+    val note: String? = null,
+    val userId: String? = null
 )
 
 @Serializable
-data class WalletResponse(val balance: Double, val transactions: List<TransactionSummary>)
+data class SettlementAccountRequest(
+    val bankName: String,
+    val accountNumber: String,
+    val bankCode: String? = null,
+    val userId: String? = null
+)
 
 @Serializable
 data class WalletBalanceResponse(
@@ -184,6 +195,9 @@ data class RideRequest(
 data class BoardRideRequest(val tripId: String, val boardingPin: String)
 
 @Serializable
+data class NoShowRequest(val tripId: String, val boardingPin: String)
+
+@Serializable
 data class PayLinkGenerateRequest(val tripId: String, val amount: Double? = null)
 
 @Serializable
@@ -196,6 +210,27 @@ data class PayLinkResponse(
 
 @Serializable
 data class PayLinkScanRequest(val qrData: String)
+
+@Serializable
+data class PayLinkScanResponse(
+    val success: Boolean,
+    val amount: Double,
+    val reference: String,
+    val message: String
+)
+
+@Serializable
+data class RideRequestResponse(
+    val tripId: String? = null,
+    val boardingPin: String? = null,
+    val status: String,
+    val totalFare: Double? = null,
+    val tripType: String? = null,
+    val ticketNumber: Int? = null,
+    val studentsAhead: Int? = null,
+    val estimatedWaitMinutes: Int? = null,
+    val destinationName: String? = null
+)
 
 @Serializable
 data class RideSummary(
@@ -211,12 +246,38 @@ data class RideSummary(
     val destinationName: String? = null
 )
 
+@Serializable
+data class RidePassengerItem(
+    val id: String,
+    val studentId: String,
+    val studentName: String,
+    val matricNumber: String,
+    val boardingPin: String,
+    val boardingStatus: String,
+    val paymentStatus: String,
+    val farePaid: Double,
+    val boardedAt: String? = null
+)
+
+@Serializable
+data class TripPassengersResponse(
+    val passengers: List<RidePassengerItem>,
+    val totalPassengers: Int,
+    val totalPaid: Double,
+    val allPaid: Boolean
+)
+
 // ============================================================
 // QUEUE MODELS
 // ============================================================
 
 @Serializable
-data class JoinQueueRequest(val destinationId: String, val seatsRequested: Int = 1)
+data class JoinQueueRequest(
+    val destinationId: String,
+    val seatsRequested: Int = 1,
+    val seats: Int? = null,
+    val userId: String? = null
+)
 
 @Serializable
 data class QueuePositionResponse(
@@ -228,7 +289,42 @@ data class QueuePositionResponse(
 )
 
 @Serializable
-data class CallNextRequest(val destinationId: String, val driverId: String)
+data class QueueEntryItem(
+    val queueId: String,
+    val destinationId: String,
+    val destinationName: String,
+    val position: Int,
+    val estimatedWait: Int, // seconds
+    val status: String
+)
+
+@Serializable
+data class QueueStatusResponse(
+    val entries: List<QueueEntryItem>
+)
+
+@Serializable
+data class CallNextRequest(
+    val destinationId: String? = null,
+    val driverId: String? = null
+)
+
+@Serializable
+data class CalledStudentItem(
+    val tripId: String,
+    val studentId: String,
+    val studentName: String,
+    val boardingPin: String,
+    val ticketNumber: Int,
+    val fleetNumber: Int
+)
+
+@Serializable
+data class CallNextResponse(
+    val called: Int,
+    val students: List<CalledStudentItem>,
+    val fleetNumber: Int
+)
 
 // ============================================================
 // EMERGENCY MODELS
@@ -242,7 +338,19 @@ data class EmergencyTriggerRequest(
 )
 
 @Serializable
-data class EmergencyResolveRequest(val incidentId: String, val driverLat: Double, val driverLng: Double)
+data class EmergencyTriggerResponse(
+    val incidentId: String,
+    val status: String,
+    val driverName: String,
+    val driverFleetNumber: Int
+)
+
+@Serializable
+data class EmergencyResolveRequest(
+    val incidentId: String,
+    val driverLat: Double = 6.2500,
+    val driverLng: Double = 6.7000
+)
 
 @Serializable
 data class FlagAbuseRequest(val incidentId: String, val reason: String)
@@ -258,7 +366,8 @@ data class EmergencyStatusResponse(
     val driverLat: Double?,
     val driverLng: Double?,
     val studentLat: Double?,
-    val studentLng: Double?
+    val studentLng: Double?,
+    val createdAt: String? = null
 )
 
 // ============================================================
@@ -269,7 +378,8 @@ data class EmergencyStatusResponse(
 data class ReportLostItemRequest(
     val tripId: String,
     val description: String,
-    val category: String = "Other"
+    val category: String = "Other",
+    val userId: String? = null
 )
 
 @Serializable
@@ -283,11 +393,21 @@ data class AdminTriggerLostItemRequest(
 data class LostItemSummary(
     val id: String,
     val studentName: String,
-    val driverName: String?,
-    val fleetNumber: Int?,
-    val itemDescription: String,
+    val driverName: String? = null,
+    val fleetNumber: Int? = null,
+    val itemDescription: String? = null,
+    val description: String? = null,
+    val category: String = "Other",
     val status: String,
-    val createdAt: String
+    val destinationName: String? = null,
+    val createdAt: String,
+    val updatedAt: String? = null
+)
+
+@Serializable
+data class LostItemActionResponse(
+    val message: String,
+    val itemId: String
 )
 
 // ============================================================
@@ -310,8 +430,15 @@ data class ReportSummary(
     val targetName: String,
     val targetRole: String,
     val incidentType: String,
+    val description: String = "",
     val status: String,
     val createdAt: String
+)
+
+@Serializable
+data class CreateReportResponse(
+    val message: String,
+    val reportId: String
 )
 
 // ============================================================
@@ -346,12 +473,62 @@ data class PendingActions(
     val lostItemClaims: Int
 )
 
+@Serializable
+data class AdminDriverItem(
+    val id: String,
+    val fullName: String,
+    val phone: String,
+    val email: String,
+    val isSuspended: Boolean,
+    val suspensionReason: String,
+    val fleetNumber: Int,
+    val kekeRegistration: String,
+    val maxSeats: Int,
+    val currentSeats: Int,
+    val driverStatus: String,
+    val verificationQrCode: String
+)
+
+@Serializable
+data class AdminStudentItem(
+    val id: String,
+    val fullName: String,
+    val phone: String,
+    val email: String,
+    val isSuspended: Boolean,
+    val suspensionReason: String,
+    val matricNumber: String,
+    val department: String,
+    val faculty: String,
+    val level: String,
+    val walletBalance: Double
+)
+
 // ============================================================
 // MARKETPLACE MODELS
 // ============================================================
 
 @Serializable
-data class ProductItem(val name: String, val description: String, val price: Double, val isAvailable: Boolean = true)
+data class VendorItem(
+    val id: String,
+    val fullName: String,
+    val phone: String = "",
+    val email: String = "",
+    val category: String = "Campus Food",
+    val rating: String = "4.8 ★",
+    val location: String = "Campus Center"
+)
+
+@Serializable
+data class ProductItem(
+    val id: String = "",
+    val vendorId: String = "",
+    val name: String,
+    val description: String = "",
+    val price: Double,
+    val imageUrl: String? = null,
+    val isAvailable: Boolean = true
+)
 
 @Serializable
 data class PlaceOrderRequest(
@@ -359,7 +536,8 @@ data class PlaceOrderRequest(
     val items: List<OrderItem>,
     val notes: String? = null,
     val dropoffLat: Double? = null,
-    val dropoffLng: Double? = null
+    val dropoffLng: Double? = null,
+    val userId: String? = null
 )
 
 @Serializable
@@ -378,16 +556,16 @@ data class DeliverOrderRequest(val orderId: String, val packagePin: String)
 data class OrderSummary(
     val id: String,
     val vendorName: String,
-    val items: List<OrderItem>,
+    val items: List<OrderItem> = emptyList(),
     val totalAmount: Double,
     val status: String,
-    val packagePin: String?,
-    val driverName: String?,
+    val packagePin: String? = null,
+    val driverName: String? = null,
     val createdAt: String
 )
 
 // ============================================================
-// DEVELOPER MODELS
+// DEVELOPER & LANDMARK MODELS
 // ============================================================
 
 @Serializable
@@ -408,6 +586,12 @@ data class LandmarkResponse(
     val isActive: Boolean
 )
 
+@Serializable
+data class AddLandmarkResponse(
+    val message: String,
+    val id: String
+)
+
 // ============================================================
 // DRIVER LOCATION MODELS
 // ============================================================
@@ -426,8 +610,8 @@ data class DriverLocationResponse(
     val fleetNumber: Int,
     val latitude: Double,
     val longitude: Double,
-    val heading: Double?,
-    val speed: Double?
+    val heading: Double? = null,
+    val speed: Double? = null
 )
 
 // ============================================================
@@ -450,20 +634,96 @@ data class PaymentRequestResponse(
     val payerId: String,
     val payerName: String,
     val amount: Double,
-    val description: String?,
+    val description: String? = null,
     val status: String,
     val createdAt: String
+)
+
+@Serializable
+data class CreatePaymentRequestResponse(
+    val id: String,
+    val status: String
 )
 
 @Serializable
 data class PaymentRequestAction(val action: String) // "accept" or "deny"
 
 // ============================================================
+// NOTIFICATION MODELS
+// ============================================================
+
+@Serializable
+data class NotificationHistoryItem(
+    val id: String,
+    val title: String,
+    val body: String,
+    val data: String? = null,
+    val isRead: Boolean,
+    val createdAt: String
+)
+
+@Serializable
+data class UnreadCountResponse(
+    val unreadCount: Int
+)
+
+// ============================================================
+// OFFLINE MODELS
+// ============================================================
+
+@Serializable
+data class OfflineBoardingPassResponse(
+    val boardingPass: String,
+    val pin: String,
+    val destinationName: String,
+    val fleetNumber: Int,
+    val fare: Double,
+    val expiresAt: Long
+)
+
+@Serializable
+data class OfflineSyncResponse(
+    val results: List<String>,
+    val synced: Int
+)
+
+// ============================================================
+// SECURITY SCAN MODELS
+// ============================================================
+
+@Serializable
+data class SecurityLookupResponse(
+    val id: String,
+    val fullName: String,
+    val role: String,
+    val fleetNumber: Int? = null,
+    val status: String? = null,
+    val kekeRegistration: String? = null,
+    val matricNumber: String? = null,
+    val department: String? = null,
+    val faculty: String? = null,
+    val level: String? = null,
+    val isVerified: Boolean = true,
+    val isSuspended: Boolean,
+    val suspensionReason: String? = null,
+    val isCleared: Boolean
+)
+
+// ============================================================
 // GENERIC RESPONSES
 // ============================================================
 
 @Serializable
-data class SuccessResponse(val message: String, val data: kotlinx.serialization.json.JsonElement? = null)
+data class HealthResponse(
+    val status: String,
+    val version: String,
+    val service: String,
+    val database: String,
+    val timestamp: Long
+)
+
+@Serializable
+data class SuccessResponse(val message: String, val details: String? = null)
 
 @Serializable
 data class ErrorResponse(val error: String, val details: String? = null)

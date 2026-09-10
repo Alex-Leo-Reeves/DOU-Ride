@@ -22,16 +22,17 @@ fun main() {
 }
 
 fun Application.module() {
-    // JSON Serialization
+    // Content Negotiation with JSON
     install(ContentNegotiation) {
         json(Json {
-            prettyPrint = true
             ignoreUnknownKeys = true
             isLenient = true
+            encodeDefaults = true
+            prettyPrint = false
         })
     }
 
-    // CORS - Manual intercept guarantees headers on every response including OPTIONS preflight
+    // CORS Headers
     intercept(ApplicationCallPipeline.Plugins) {
         val origin = call.request.headers["Origin"] ?: "*"
         call.response.header(HttpHeaders.AccessControlAllowOrigin, origin)
@@ -48,92 +49,69 @@ fun Application.module() {
         }
     }
 
-    // Error handling
+    // Status Pages for clean Error Responses
     install(StatusPages) {
         exception<Throwable> { call, cause ->
-            call.respondText(
-                contentType = ContentType.Application.Json,
+            println("[SERVER ERROR] ${call.request.httpMethod.value} ${call.request.uri}: ${cause.message}")
+            cause.printStackTrace()
+            call.respond(
                 status = HttpStatusCode.InternalServerError,
-                text = """{"error":"${cause.message?.replace("\"", "'") ?: "Unknown error"}","details":"Internal server error"}"""
+                message = ErrorResponse(
+                    error = cause.message ?: "Internal server error",
+                    details = cause.javaClass.simpleName
+                )
             )
         }
     }
 
     // Initialize Firebase Admin SDK for push notifications
-    NotificationService.initialize()
+    try {
+        NotificationService.initialize()
+    } catch (e: Exception) {
+        println("[SERVER] Firebase init warning: ${e.message}")
+    }
 
-    // ============================================================
-    // ALL API ROUTES
-    // ============================================================
+    // Application Routes
     routing {
-        // Health check with DB status
-        get("/api/health") {
-            var dbOk = false
-            try {
-                DatabaseService.getConnection().use { conn ->
-                    dbOk = !conn.isClosed
-                }
-            } catch (_: Exception) {}
+        fun Route.healthHandler() {
+            val dbOk = DatabaseService.isHealthy()
             call.respond(HealthResponse(
                 status = "ok",
-                version = "1.0.1",
+                version = "1.0.2",
                 service = "DOU Transit Production API",
                 database = if (dbOk) "connected" else "connecting",
                 timestamp = System.currentTimeMillis()
             ))
         }
 
-        // Auth routes
+        // Root & Health check endpoints
+        get("/") { healthHandler() }
+        get("/health") { healthHandler() }
+        get("/api/health") { healthHandler() }
+
+        // Route modules
         authRoutes()
-
-        // Wallet & payment routes
         walletRoutes()
-
-        // Ride routes
         rideRoutes()
-
-        // Queue routes
         queueRoutes()
-
-        // Emergency routes
         emergencyRoutes()
-
-        // Lost & Found routes
         lostItemRoutes()
-
-        // Report routes
         reportRoutes()
-
-        // Admin routes
         adminRoutes()
-
-        // Marketplace routes
         marketplaceRoutes()
-
-        // Developer mapping routes
         developerRoutes()
-
-        // Driver location routes
         driverLocationRoutes()
-
-        // Security gate routes
         securityRoutes()
-
-        // Notification dispatch
         notificationRoutes()
-
-        // Offline resilience
         offlineRoutes()
-
-        // Payment request routes
         paymentRequestRoutes()
     }
 
     println("""
-    ╔══════════════════════════════════════════╗
-    ║     DOU Transit API Server v1.0.0       ║
-    ║     Running on port ${AppConfig.port}           ║
-    ║     OSRM: ${AppConfig.osrmUrl}   ║
-    ╚══════════════════════════════════════════╝
+    ╔══════════════════════════════════════════════════════╗
+    ║             DOU Transit API Server v1.0.2           ║
+    ║             Port: ${AppConfig.port}                              ║
+    ║             Database: ${AppConfig.supabaseDbUrl.substringBefore("?")} ║
+    ╚══════════════════════════════════════════════════════╝
     """.trimIndent())
 }

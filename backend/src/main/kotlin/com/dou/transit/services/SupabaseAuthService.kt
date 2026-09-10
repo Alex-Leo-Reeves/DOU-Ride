@@ -8,8 +8,8 @@ import io.ktor.client.plugins.contentnegotiation.*
 import io.ktor.client.request.*
 import io.ktor.http.*
 import io.ktor.serialization.kotlinx.json.*
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
 
 /**
  * Service for interacting with Supabase Auth REST API.
@@ -22,8 +22,8 @@ object SupabaseAuthService {
         }
     }
 
-    private val supabaseUrl = AppConfig.supabaseUrl
-    private val serviceRoleKey = AppConfig.supabaseServiceKey
+    private val supabaseUrl get() = AppConfig.supabaseUrl
+    private val serviceRoleKey get() = AppConfig.supabaseServiceKey
 
     @Serializable
     data class SignUpRequest(
@@ -103,11 +103,10 @@ object SupabaseAuthService {
                 ))
             }
 
-            if (response.status == HttpStatusCode.OK || response.status == HttpStatusCode.Created) {
+            if (response.status.isSuccess()) {
                 val body = response.body<SignUpResponse>()
-                if (body.id != null || body.user?.id != null) {
-                    val uid = body.id ?: body.user!!.id
-                    // Generate a simple token (in production use proper JWT)
+                val uid = body.id ?: body.user?.id
+                if (uid != null) {
                     val token = "sb_${uid}_${System.currentTimeMillis()}"
                     AuthResult(uid, token)
                 } else {
@@ -115,16 +114,16 @@ object SupabaseAuthService {
                 }
             } else {
                 val body = try { response.body<SignUpResponse>() } catch (_: Exception) { null }
-                AuthResult(null, null, body?.error ?: "HTTP ${response.status.value}")
+                AuthResult(null, null, body?.error ?: body?.error_description ?: "HTTP ${response.status.value}")
             }
         } catch (e: Exception) {
-            AuthResult(null, null, e.message ?: "Network error")
+            AuthResult(null, null, e.message ?: "Network error connecting to Auth")
         }
     }
 
     /**
      * Admin creates a user directly (bypasses email confirmation).
-     * Used for admin/security/vendor/developer accounts created by the admin.
+     * Used for student/driver/vendor accounts.
      */
     suspend fun adminCreateUser(email: String, password: String, metadata: Map<String, String>? = null): AuthResult {
         return try {
@@ -140,19 +139,26 @@ object SupabaseAuthService {
                 ))
             }
 
-            if (response.status == HttpStatusCode.OK || response.status == HttpStatusCode.Created) {
+            if (response.status.isSuccess()) {
                 val body = response.body<AdminCreateUserResponse>()
                 if (body.id != null) {
                     val token = "sb_${body.id}_${System.currentTimeMillis()}"
                     AuthResult(body.id, token)
                 } else {
-                    AuthResult(null, null, body.error ?: "Admin create failed")
+                    AuthResult(null, null, body.error ?: body.error_description ?: "User creation failed")
                 }
             } else {
-                AuthResult(null, null, "HTTP ${response.status.value}")
+                // If user already exists, attempt standard sign-in to retrieve ID
+                val signInResult = signIn(email, password)
+                if (signInResult.userId != null) {
+                    signInResult
+                } else {
+                    val body = try { response.body<AdminCreateUserResponse>() } catch (_: Exception) { null }
+                    AuthResult(null, null, body?.error ?: body?.error_description ?: "HTTP ${response.status.value}")
+                }
             }
         } catch (e: Exception) {
-            AuthResult(null, null, e.message ?: "Network error")
+            AuthResult(null, null, e.message ?: "Network error connecting to Auth")
         }
     }
 
@@ -167,19 +173,19 @@ object SupabaseAuthService {
                 setBody(SignInRequest(email = email, password = password))
             }
 
-            if (response.status == HttpStatusCode.OK) {
+            if (response.status.isSuccess()) {
                 val body = response.body<SignInResponse>()
                 if (body.access_token != null && body.user?.id != null) {
-                    AuthResult(body.user!!.id, body.access_token)
+                    AuthResult(body.user.id, body.access_token)
                 } else {
                     AuthResult(null, null, body.error ?: body.error_description ?: "Login failed")
                 }
             } else {
                 val body = try { response.body<SignInResponse>() } catch (_: Exception) { null }
-                AuthResult(null, null, body?.error ?: "Invalid credentials")
+                AuthResult(null, null, body?.error ?: body?.error_description ?: "Invalid credentials")
             }
         } catch (e: Exception) {
-            AuthResult(null, null, e.message ?: "Network error")
+            AuthResult(null, null, e.message ?: "Network error connecting to Auth")
         }
     }
 }

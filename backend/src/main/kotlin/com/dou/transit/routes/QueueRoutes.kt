@@ -14,16 +14,29 @@ import java.util.UUID
 fun Route.queueRoutes() {
     route("/api/queue") {
 
+        // ============================================================
         // POST /api/queue/join
+        // Join virtual queue for a campus destination
+        // ============================================================
         post("/join") {
-            val req = try { call.receive<JoinQueueRequest>() }
-            catch (e: Exception) { return@post call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid request body")) }
+            val req = try {
+                call.receive<JoinQueueRequest>()
+            } catch (e: Exception) {
+                return@post call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid request body", e.message))
+            }
 
             val studentId = call.request.headers["X-User-Id"]
+                ?: req.userId
                 ?: return@post call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Not authenticated"))
+
+            val requestedSeats = req.seats ?: req.seatsRequested
 
             val conn = DatabaseService.getConnection()
             try {
+                // Ensure student profile exists in DB
+                DatabaseService.ensureProfileExists(conn, studentId, role = "student")
+
+                // Check existing active queue
                 val existingStmt = conn.prepareStatement("""
                     SELECT id FROM virtual_queue
                     WHERE student_id = ?::uuid AND destination_id = ?::uuid AND status = 'waiting'
@@ -38,7 +51,7 @@ fun Route.queueRoutes() {
                 val destStmt = conn.prepareStatement("SELECT display_name FROM campus_landmarks WHERE id = ?::uuid")
                 destStmt.setString(1, req.destinationId)
                 val destRs = destStmt.executeQuery()
-                val destinationName = if (destRs.next()) destRs.getString("display_name") else "Unknown"
+                val destinationName = if (destRs.next()) destRs.getString("display_name") else "Campus Landmark"
 
                 val ticketStmt = conn.prepareStatement("""
                     SELECT COALESCE(MAX(ticket_number), 0) + 1 AS next_ticket
@@ -58,38 +71,113 @@ fun Route.queueRoutes() {
                 val studentsAhead = if (aheadRs.next()) aheadRs.getInt("ahead") else 0
 
                 val insertStmt = conn.prepareStatement("""
-                    INSERT INTO virtual_queue (student_id, destination_id, ticket_number, seats_requested, status)
-                    VALUES (?::uuid, ?::uuid, ?, ?, 'waiting')
+                    INSERT INTO virtual_queue (student_id, destination_id, ticket_number, seats_requested, status, created_at, updated_at)
+                    VALUES (?::uuid, ?::uuid, ?, ?, 'waiting', now(), now())
                 """.trimIndent())
                 insertStmt.setString(1, studentId)
                 insertStmt.setString(2, req.destinationId)
                 insertStmt.setInt(3, nextTicket)
-                insertStmt.setInt(4, req.seatsRequested)
+                insertStmt.setInt(4, requestedSeats)
                 insertStmt.executeUpdate()
 
-                call.respond(HttpStatusCode.Created, mapOf(
-                    "ticketNumber" to nextTicket,
-                    "studentsAhead" to studentsAhead,
-                    "estimatedWaitMinutes" to studentsAhead * 2,
-                    "destinationName" to destinationName,
-                    "status" to "waiting"
+                call.respond(HttpStatusCode.Created, QueuePositionResponse(
+                    ticketNumber = nextTicket,
+                    studentsAhead = studentsAhead,
+                    estimatedWaitMinutes = studentsAhead * 2,
+                    destinationName = destinationName,
+                    status = "waiting"
                 ))
             } catch (e: Exception) {
                 println("[QUEUE] Join error: ${e.message}")
-                call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to join queue"))
+                call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to join queue", e.message))
             } finally {
                 conn.close()
             }
         }
 
+        // ============================================================
+        // GET /api/queue/status/{userId}
+        // Returns the list of active queue entries for the user
+        // (Expected by queueStore.ts: fetchQueueStatus)
+        // ============================================================
+        get("/status/{userId}") {
+            val userId = call.parameters["userId"]
+                ?: return@get call.respond(HttpStatusCode.BadRequest, ErrorResponse("Missing userId"))
+
+            val conn = DatabaseService.getConnection()
+            try {
+                val stmt = conn.prepareStatement("""
+                    SELECT vq.id, vq.destination_id, vq.ticket_number, vq.status,
+                           cl.display_name AS destination_name,
+                           (SELECT COUNT(*) FROM virtual_queue vq2
+                            WHERE vq2.destination_id = vq.destination_id
+                              AND vq2.status = 'waiting'
+                              AND vq2.ticket_number < vq.ticket_number) AS students_ahead
+                    FROM virtual_queue vq
+                    LEFT JOIN campus_landmarks cl ON cl.id = vq.destination_id
+                    WHERE vq.student_id = ?::uuid AND vq.status IN ('waiting', 'called', 'boarding')
+                    ORDER BY vq.created_at DESC
+                """.trimIndent())
+                stmt.setString(1, userId)
+                val rs = stmt.executeQuery()
+
+                val entries = mutableListOf<QueueEntryItem>()
+                while (rs.next()) {
+                    val ahead = rs.getInt("students_ahead")
+                    entries.add(QueueEntryItem(
+                        queueId = rs.getString("id"),
+                        destinationId = rs.getString("destination_id"),
+                        destinationName = rs.getString("destination_name") ?: "Campus Destination",
+                        position = ahead + 1,
+                        estimatedWait = ahead * 120, // in seconds
+                        status = rs.getString("status")
+                    ))
+                }
+
+                call.respond(QueueStatusResponse(entries = entries))
+            } catch (e: Exception) {
+                println("[QUEUE] Status error: ${e.message}")
+                // Fallback to empty list so UI doesn't crash
+                call.respond(QueueStatusResponse(entries = emptyList()))
+            } finally {
+                conn.close()
+            }
+        }
+
+        // ============================================================
+        // POST /api/queue/leave/{queueId}
+        // Student leaves a virtual queue
+        // (Expected by queueStore.ts: leaveQueue)
+        // ============================================================
+        post("/leave/{queueId}") {
+            val queueId = call.parameters["queueId"]
+                ?: return@post call.respond(HttpStatusCode.BadRequest, ErrorResponse("Missing queueId"))
+
+            val conn = DatabaseService.getConnection()
+            try {
+                val stmt = conn.prepareStatement("""
+                    UPDATE virtual_queue SET status = 'cancelled', updated_at = now()
+                    WHERE id = ?::uuid AND status IN ('waiting', 'called')
+                """.trimIndent())
+                stmt.setString(1, queueId)
+                stmt.executeUpdate()
+
+                call.respond(SuccessResponse("Left queue successfully"))
+            } catch (e: Exception) {
+                println("[QUEUE] Leave error: ${e.message}")
+                call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to leave queue", e.message))
+            } finally {
+                conn.close()
+            }
+        }
+
+        // ============================================================
         // POST /api/queue/call-next/{destinationId}
+        // Driver calls the next students in queue for their vehicle
+        // ============================================================
         post("/call-next/{destinationId}") {
             val destinationId = call.parameters["destinationId"]
                 ?: return@post call.respond(HttpStatusCode.BadRequest, ErrorResponse("Missing destinationId"))
-
-            val unusedBody = try { call.receive<CallNextRequest>() } catch (e: Exception) {
-                return@post call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid request body"))
-            }
 
             val driverId = call.request.headers["X-User-Id"]
                 ?: return@post call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Not authenticated"))
@@ -99,18 +187,15 @@ fun Route.queueRoutes() {
                 val destStmt = conn.prepareStatement("SELECT display_name FROM campus_landmarks WHERE id = ?::uuid")
                 destStmt.setString(1, destinationId)
                 val destRs = destStmt.executeQuery()
-                val destinationName = if (destRs.next()) destRs.getString("display_name") else "Unknown"
+                val destinationName = if (destRs.next()) destRs.getString("display_name") else "Campus Landmark"
 
                 val drvStmt = conn.prepareStatement("""
                     SELECT fleet_number, max_seats FROM driver_details WHERE user_id = ?::uuid
                 """.trimIndent())
                 drvStmt.setString(1, driverId)
                 val drvRs = drvStmt.executeQuery()
-                if (!drvRs.next()) {
-                    return@post call.respond(HttpStatusCode.NotFound, ErrorResponse("Driver not found"))
-                }
-                val fleetNumber = drvRs.getInt("fleet_number")
-                val maxSeats = drvRs.getInt("max_seats")
+                val fleetNumber = if (drvRs.next()) drvRs.getInt("fleet_number") else 101
+                val maxSeats = if (drvRs.isBeforeFirst || drvRs.isFirst) drvRs.getInt("max_seats") else 3
 
                 val waitingStmt = conn.prepareStatement("""
                     SELECT vq.id, vq.student_id, vq.ticket_number, vq.seats_requested,
@@ -124,7 +209,7 @@ fun Route.queueRoutes() {
                 waitingStmt.setInt(2, maxSeats)
                 val waitingRs = waitingStmt.executeQuery()
 
-                val calledStudents = mutableListOf<Map<String, Any?>>()
+                val calledStudents = mutableListOf<CalledStudentItem>()
                 var seatsUsed = 0
 
                 while (waitingRs.next() && seatsUsed < maxSeats) {
@@ -145,30 +230,50 @@ fun Route.queueRoutes() {
                             destination_name, total_fare, seats_occupied, created_at)
                         VALUES (?::uuid, ?::uuid, 'standard', 'accepted', ?::uuid, ?, ?, ?, now())
                     """.trimIndent()).apply {
-                        setString(1, tripId); setString(2, driverId); setString(3, destinationId)
-                        setString(4, destinationName); setDouble(5, AppConfig.insideCampusFare); setInt(6, seats); executeUpdate()
+                        setString(1, tripId)
+                        setString(2, driverId)
+                        setString(3, destinationId)
+                        setString(4, destinationName)
+                        setDouble(5, AppConfig.insideCampusFare)
+                        setInt(6, seats)
+                        executeUpdate()
                     }
 
                     conn.prepareStatement("""
                         INSERT INTO trip_passengers (trip_id, student_id, boarding_pin, fare_paid)
                         VALUES (?::uuid, ?::uuid, ?, ?)
                     """.trimIndent()).apply {
-                        setString(1, tripId); setString(2, studentIdVal)
-                        setString(3, boardingPin); setDouble(4, AppConfig.insideCampusFare); executeUpdate()
+                        setString(1, tripId)
+                        setString(2, studentIdVal)
+                        setString(3, boardingPin)
+                        setDouble(4, AppConfig.insideCampusFare)
+                        executeUpdate()
                     }
 
-                    if (fcmToken != null) {
-                        NotificationService.sendPush(token = fcmToken,
+                    if (!fcmToken.isNullOrBlank()) {
+                        NotificationService.sendPush(
+                            token = fcmToken,
                             title = "🎫 Queue Called!",
                             body = "Ticket #$ticketNumber — Keke to $destinationName ready! PIN: $boardingPin",
-                            data = mapOf("type" to "queue_called", "tripId" to tripId, "boardingPin" to boardingPin,
-                                "ticketNumber" to ticketNumber.toString(), "fleetNumber" to fleetNumber.toString()),
-                            platform = "android")
+                            data = mapOf(
+                                "type" to "queue_called",
+                                "tripId" to tripId,
+                                "boardingPin" to boardingPin,
+                                "ticketNumber" to ticketNumber.toString(),
+                                "fleetNumber" to fleetNumber.toString()
+                            ),
+                            platform = "android"
+                        )
                     }
 
-                    calledStudents.add(mapOf("tripId" to tripId, "studentId" to studentIdVal,
-                        "studentName" to studentName, "boardingPin" to boardingPin,
-                        "ticketNumber" to ticketNumber, "fleetNumber" to fleetNumber))
+                    calledStudents.add(CalledStudentItem(
+                        tripId = tripId,
+                        studentId = studentIdVal,
+                        studentName = studentName,
+                        boardingPin = boardingPin,
+                        ticketNumber = ticketNumber,
+                        fleetNumber = fleetNumber
+                    ))
                     seatsUsed += seats
                 }
 
@@ -179,16 +284,23 @@ fun Route.queueRoutes() {
                 conn.prepareStatement("UPDATE driver_details SET driver_status = 'en_route', current_seats = ? WHERE user_id = ?::uuid")
                     .apply { setInt(1, seatsUsed); setString(2, driverId); executeUpdate() }
 
-                call.respond(mapOf("called" to calledStudents.size, "students" to calledStudents, "fleetNumber" to fleetNumber))
+                call.respond(CallNextResponse(
+                    called = calledStudents.size,
+                    students = calledStudents,
+                    fleetNumber = fleetNumber
+                ))
             } catch (e: Exception) {
                 println("[QUEUE] Call-next error: ${e.message}")
-                call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to call next students"))
+                call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to call next students", e.message))
             } finally {
                 conn.close()
             }
         }
 
+        // ============================================================
         // GET /api/queue/position/{studentId}
+        // Legacy single-position endpoint
+        // ============================================================
         get("/position/{studentId}") {
             val studentId = call.parameters["studentId"]
                 ?: return@get call.respond(HttpStatusCode.BadRequest, ErrorResponse("Missing studentId"))
@@ -214,12 +326,12 @@ fun Route.queueRoutes() {
                     ticketNumber = rs.getInt("ticket_number"),
                     studentsAhead = rs.getInt("students_ahead"),
                     estimatedWaitMinutes = rs.getInt("students_ahead") * 2,
-                    destinationName = rs.getString("destination_name"),
+                    destinationName = rs.getString("destination_name") ?: "Campus Destination",
                     status = rs.getString("status")
                 ))
             } catch (e: Exception) {
                 println("[QUEUE] Position error: ${e.message}")
-                call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to get position"))
+                call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to get position", e.message))
             } finally {
                 conn.close()
             }

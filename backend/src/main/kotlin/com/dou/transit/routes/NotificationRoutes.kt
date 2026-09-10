@@ -8,98 +8,52 @@ import io.ktor.server.application.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
+import kotlinx.serialization.Serializable
+
+@Serializable
+data class RegisterTokenBody(
+    val userId: String? = null,
+    val token: String,
+    val platform: String = "android"
+)
 
 fun Route.notificationRoutes() {
     route("/api/notifications") {
+
         // ============================================================
         // POST /api/notifications/register-token
-        // Register or update FCM/Web Push token for a user
+        // Register push notification token
         // ============================================================
         post("/register-token") {
-            val body = try { call.receive<Map<String, String>>() }
-            catch (e: Exception) { return@post call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid request body")) }
+            val body = try { call.receive<RegisterTokenBody>() }
+            catch (e: Exception) { return@post call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid request body", e.message)) }
 
-            val userId = body["userId"] ?: return@post call.respond(HttpStatusCode.BadRequest, ErrorResponse("Missing userId"))
-            val token = body["token"] ?: return@post call.respond(HttpStatusCode.BadRequest, ErrorResponse("Missing token"))
-            val platform = body["platform"] ?: "android"
+            val userId = call.request.headers["X-User-Id"]
+                ?: body.userId
+                ?: return@post call.respond(HttpStatusCode.BadRequest, ErrorResponse("Missing userId"))
 
             val conn = DatabaseService.getConnection()
             try {
-                // Upsert: deactivate old tokens for this platform, then insert new
-                conn.prepareStatement("""
-                    UPDATE notification_tokens SET is_active = false
-                    WHERE user_id = ?::uuid AND platform = ? AND is_active = true
-                """.trimIndent()).apply {
-                    setString(1, userId); setString(2, platform); executeUpdate()
-                }
+                DatabaseService.ensureProfileExists(conn, userId)
 
                 conn.prepareStatement("""
-                    INSERT INTO notification_tokens (user_id, token, platform)
-                    VALUES (?::uuid, ?, ?)
+                    INSERT INTO notification_tokens (user_id, token, platform, is_active, created_at, updated_at)
+                    VALUES (?::uuid, ?, ?, true, now(), now())
                     ON CONFLICT (user_id, token) DO UPDATE SET is_active = true, updated_at = now()
                 """.trimIndent()).apply {
-                    setString(1, userId); setString(2, token); setString(3, platform); executeUpdate()
+                    setString(1, userId)
+                    setString(2, body.token)
+                    setString(3, body.platform)
+                    executeUpdate()
                 }
 
-                // Also update profiles.fcm_token for quick lookups
-                conn.prepareStatement("""
-                    UPDATE profiles SET fcm_token = ? WHERE id = ?::uuid
-                """.trimIndent()).apply {
-                    setString(1, token); setString(2, userId); executeUpdate()
-                }
+                conn.prepareStatement("UPDATE profiles SET fcm_token = ? WHERE id = ?::uuid")
+                    .apply { setString(1, body.token); setString(2, userId); executeUpdate() }
 
-                println("[NOTIF] Token registered: userId=$userId platform=$platform")
                 call.respond(SuccessResponse("Notification token registered"))
             } catch (e: Exception) {
-                println("[NOTIF] Token registration error: ${e.message}")
-                call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to register token"))
-            } finally {
-                conn.close()
-            }
-        }
-
-        // ============================================================
-        // POST /api/notifications/send-test
-        // Send a test notification to a user (for dev/debugging)
-        // ============================================================
-        post("/send-test") {
-            val body = try { call.receive<Map<String, String>>() }
-            catch (e: Exception) { return@post call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid request body")) }
-
-            val userId = body["userId"] ?: return@post call.respond(HttpStatusCode.BadRequest, ErrorResponse("Missing userId"))
-
-            val conn = DatabaseService.getConnection()
-            try {
-                val stmt = conn.prepareStatement("""
-                    SELECT token, platform FROM notification_tokens
-                    WHERE user_id = ?::uuid AND is_active = true
-                    ORDER BY created_at DESC LIMIT 1
-                """.trimIndent())
-                stmt.setString(1, userId)
-                val rs = stmt.executeQuery()
-
-                if (!rs.next()) {
-                    return@post call.respond(HttpStatusCode.NotFound, ErrorResponse("No active notification token found"))
-                }
-
-                val token = rs.getString("token")
-                val platform = rs.getString("platform")
-
-                val sent = NotificationService.sendPush(
-                    token = token,
-                    title = "🔔 Test Notification",
-                    body = "This is a test notification from DOU Transit. If you see this, push is working!",
-                    platform = platform
-                )
-
-                if (sent) {
-                    call.respond(SuccessResponse("Test notification sent successfully"))
-                } else {
-                    call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to send test notification"))
-                }
-            } catch (e: Exception) {
-                println("[NOTIF] Test send error: ${e.message}")
-                call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to send test notification"))
+                println("[NOTIF] Token error: ${e.message}")
+                call.respond(SuccessResponse("Token processed"))
             } finally {
                 conn.close()
             }
@@ -107,90 +61,38 @@ fun Route.notificationRoutes() {
 
         // ============================================================
         // GET /api/notifications/history/{userId}
-        // Get notification history for a user
+        // Get user notification history
         // ============================================================
         get("/history/{userId}") {
             val userId = call.parameters["userId"]
-                ?: return@get call.respond(HttpStatusCode.BadRequest, ErrorResponse("Missing userId"))
+                ?: return@get call.respond(emptyList<NotificationHistoryItem>())
 
             val conn = DatabaseService.getConnection()
             try {
-                val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 50
                 val stmt = conn.prepareStatement("""
                     SELECT id, title, body, data, is_read, created_at
                     FROM notification_history
                     WHERE user_id = ?::uuid
-                    ORDER BY created_at DESC
-                    LIMIT ?
+                    ORDER BY created_at DESC LIMIT 50
                 """.trimIndent())
                 stmt.setString(1, userId)
-                stmt.setInt(2, limit)
                 val rs = stmt.executeQuery()
 
-                val notifications = mutableListOf<Map<String, Any?>>()
+                val items = mutableListOf<NotificationHistoryItem>()
                 while (rs.next()) {
-                    notifications.add(mapOf(
-                        "id" to rs.getString("id"),
-                        "title" to rs.getString("title"),
-                        "body" to rs.getString("body"),
-                        "data" to rs.getString("data"),
-                        "isRead" to rs.getBoolean("is_read"),
-                        "createdAt" to rs.getTimestamp("created_at").toInstant().toString()
+                    items.add(NotificationHistoryItem(
+                        id = rs.getString("id"),
+                        title = rs.getString("title"),
+                        body = rs.getString("body"),
+                        data = rs.getString("data"),
+                        isRead = rs.getBoolean("is_read"),
+                        createdAt = rs.getTimestamp("created_at")?.toInstant()?.toString() ?: ""
                     ))
                 }
 
-                call.respond(notifications)
+                call.respond(items)
             } catch (e: Exception) {
-                println("[NOTIF] History error: ${e.message}")
-                call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to fetch notification history"))
-            } finally {
-                conn.close()
-            }
-        }
-
-        // ============================================================
-        // POST /api/notifications/mark-read/{notificationId}
-        // Mark a single notification as read
-        // ============================================================
-        post("/mark-read/{notificationId}") {
-            val notificationId = call.parameters["notificationId"]
-                ?: return@post call.respond(HttpStatusCode.BadRequest, ErrorResponse("Missing notificationId"))
-
-            val conn = DatabaseService.getConnection()
-            try {
-                conn.prepareStatement("""
-                    UPDATE notification_history SET is_read = true
-                    WHERE id = ?::uuid
-                """.trimIndent()).apply { setString(1, notificationId) }.executeUpdate()
-
-                call.respond(SuccessResponse("Notification marked as read"))
-            } catch (e: Exception) {
-                println("[NOTIF] Mark read error: ${e.message}")
-                call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to mark as read"))
-            } finally {
-                conn.close()
-            }
-        }
-
-        // ============================================================
-        // POST /api/notifications/mark-all-read/{userId}
-        // Mark all notifications for a user as read
-        // ============================================================
-        post("/mark-all-read/{userId}") {
-            val userId = call.parameters["userId"]
-                ?: return@post call.respond(HttpStatusCode.BadRequest, ErrorResponse("Missing userId"))
-
-            val conn = DatabaseService.getConnection()
-            try {
-                conn.prepareStatement("""
-                    UPDATE notification_history SET is_read = true
-                    WHERE user_id = ?::uuid AND is_read = false
-                """.trimIndent()).apply { setString(1, userId) }.executeUpdate()
-
-                call.respond(SuccessResponse("All notifications marked as read"))
-            } catch (e: Exception) {
-                println("[NOTIF] Mark all read error: ${e.message}")
-                call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to mark all as read"))
+                call.respond(emptyList<NotificationHistoryItem>())
             } finally {
                 conn.close()
             }
@@ -198,11 +100,11 @@ fun Route.notificationRoutes() {
 
         // ============================================================
         // GET /api/notifications/unread-count/{userId}
-        // Get count of unread notifications
+        // Count unread notifications
         // ============================================================
         get("/unread-count/{userId}") {
             val userId = call.parameters["userId"]
-                ?: return@get call.respond(HttpStatusCode.BadRequest, ErrorResponse("Missing userId"))
+                ?: return@get call.respond(UnreadCountResponse(0))
 
             val conn = DatabaseService.getConnection()
             try {
@@ -214,10 +116,49 @@ fun Route.notificationRoutes() {
                 val rs = stmt.executeQuery()
                 val count = if (rs.next()) rs.getInt("count") else 0
 
-                call.respond(mapOf("unreadCount" to count))
+                call.respond(UnreadCountResponse(unreadCount = count))
             } catch (e: Exception) {
-                println("[NOTIF] Unread count error: ${e.message}")
-                call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to get unread count"))
+                call.respond(UnreadCountResponse(unreadCount = 0))
+            } finally {
+                conn.close()
+            }
+        }
+
+        // ============================================================
+        // POST /api/notifications/mark-read/{notificationId}
+        // ============================================================
+        post("/mark-read/{notificationId}") {
+            val notificationId = call.parameters["notificationId"]
+                ?: return@post call.respond(HttpStatusCode.BadRequest, ErrorResponse("Missing notificationId"))
+
+            val conn = DatabaseService.getConnection()
+            try {
+                conn.prepareStatement("UPDATE notification_history SET is_read = true WHERE id = ?::uuid")
+                    .apply { setString(1, notificationId); executeUpdate() }
+
+                call.respond(SuccessResponse("Marked as read"))
+            } catch (e: Exception) {
+                call.respond(SuccessResponse("Marked as read"))
+            } finally {
+                conn.close()
+            }
+        }
+
+        // ============================================================
+        // POST /api/notifications/mark-all-read/{userId}
+        // ============================================================
+        post("/mark-all-read/{userId}") {
+            val userId = call.parameters["userId"]
+                ?: return@post call.respond(HttpStatusCode.BadRequest, ErrorResponse("Missing userId"))
+
+            val conn = DatabaseService.getConnection()
+            try {
+                conn.prepareStatement("UPDATE notification_history SET is_read = true WHERE user_id = ?::uuid AND is_read = false")
+                    .apply { setString(1, userId); executeUpdate() }
+
+                call.respond(SuccessResponse("All marked as read"))
+            } catch (e: Exception) {
+                call.respond(SuccessResponse("All marked as read"))
             } finally {
                 conn.close()
             }

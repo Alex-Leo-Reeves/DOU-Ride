@@ -4,15 +4,16 @@ import com.dou.transit.config.AppConfig
 import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
 import java.sql.Connection
-import java.sql.Timestamp
-import java.time.Instant
+import java.util.UUID
 
 /**
  * Database connection pool service.
- * Connects to Supabase PostgreSQL via connection pooler.
+ * Connects to Supabase PostgreSQL via connection pooler (port 6543) or direct connection.
  */
 object DatabaseService {
+    @Volatile
     private var dataSource: HikariDataSource? = null
+    @Volatile
     private var initError: String? = null
 
     init {
@@ -23,11 +24,11 @@ object DatabaseService {
     fun initPool() {
         if (dataSource != null && !dataSource!!.isClosed) return
         try {
-            val config = HikariConfig().apply {
-                val url = AppConfig.supabaseDbUrl
-                    .replace("aws-0-eu-west-1.pooler.supabase.com", "aws-0-eu-west-3.pooler.supabase.com")
-                println("[DB] Raw DATABASE_URL (masked): ${url.replace(Regex("password=[^&]*"), "password=***")}")
+            val url = AppConfig.supabaseDbUrl
+                .replace("aws-0-eu-west-1.pooler.supabase.com", "aws-0-eu-west-3.pooler.supabase.com")
+            println("[DB] Initializing Hikari pool with URL: ${url.replace(Regex("password=[^&]*"), "password=***")}")
 
+            val config = HikariConfig().apply {
                 if (url.contains("@")) {
                     // Format: jdbc:postgresql://user:pass@host:port/db
                     val cleanUrl = url.replaceFirst("jdbc:", "")
@@ -50,8 +51,6 @@ object DatabaseService {
                     }
                 } else {
                     // Format: jdbc:postgresql://host:port/db?user=X&password=Y
-                    // HikariCP / PgBouncer need user & password as connection properties,
-                    // not just JDBC URL query params, for correct tenant routing.
                     val queryStart = url.indexOf('?')
                     val baseUrl: String
                     val params: MutableMap<String, String>
@@ -60,6 +59,7 @@ object DatabaseService {
                         baseUrl = url.substring(0, queryStart)
                         params = url.substring(queryStart + 1)
                             .split("&")
+                            .filter { it.contains("=") }
                             .associate {
                                 val (k, v) = it.split("=", limit = 2)
                                 k to java.net.URLDecoder.decode(v, "UTF-8")
@@ -70,31 +70,37 @@ object DatabaseService {
                         params = mutableMapOf()
                     }
 
-                    // Extract user/password from query params and set as HikariCP properties
+                    // Extract user/password from query params and set as properties
                     params.remove("user")?.let { username = it }
                     params.remove("password")?.let { password = it }
 
-                    // Ensure sslmode is present
+                    if (username.isNullOrBlank()) {
+                        username = "postgres.uawbhgrxmvwrhncpophm"
+                    }
+                    if (password.isNullOrBlank()) {
+                        password = AppConfig.supabaseDbPassword
+                    }
+
                     if (!params.containsKey("sslmode")) {
                         params["sslmode"] = "require"
                     }
 
-                    // Rebuild JDBC URL without user/password in query string
                     val cleanQuery = params.entries.joinToString("&") { "${it.key}=${it.value}" }
                     jdbcUrl = if (cleanQuery.isNotEmpty()) "$baseUrl?$cleanQuery" else baseUrl
                 }
 
-                println("[DB] Final JDBC URL: ${jdbcUrl?.replace(Regex("password=[^&]*"), "password=***")}")
-                println("[DB] Username: $username")
-
                 maximumPoolSize = 10
-                minimumIdle = 2
+                minimumIdle = 1
                 idleTimeout = 30000
                 connectionTimeout = 10000
                 maxLifetime = 600000
                 isAutoCommit = true
                 driverClassName = "org.postgresql.Driver"
+
+                addDataSourceProperty("tcpKeepAlive", "true")
+                addDataSourceProperty("reWriteBatchedInserts", "true")
             }
+
             dataSource = HikariDataSource(config)
             initError = null
             println("[DB] Connection pool initialized successfully")
@@ -109,13 +115,59 @@ object DatabaseService {
         if (dataSource == null || dataSource!!.isClosed) {
             initPool()
         }
-        val ds = dataSource ?: throw IllegalStateException("Database failed to initialize: $initError")
+        val ds = dataSource ?: throw IllegalStateException("Database pool unavailable: $initError")
         return ds.connection
+    }
+
+    fun isHealthy(): Boolean {
+        return try {
+            getConnection().use { conn ->
+                !conn.isClosed && conn.isValid(2)
+            }
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    /**
+     * Ensures that a user profile exists in the `profiles` table to prevent
+     * foreign key constraint violations when operations like wallet deposits happen.
+     */
+    fun ensureProfileExists(
+        conn: Connection,
+        userId: String,
+        role: String = "student",
+        fullName: String = "DOU User",
+        phone: String? = null,
+        email: String? = null
+    ) {
+        try {
+            val checkStmt = conn.prepareStatement("SELECT id FROM profiles WHERE id = ?::uuid LIMIT 1")
+            checkStmt.setString(1, userId)
+            val rs = checkStmt.executeQuery()
+            if (!rs.next()) {
+                val effectiveEmail = email ?: "${userId.take(8)}@student.dou.edu.ng"
+                val insertStmt = conn.prepareStatement("""
+                    INSERT INTO profiles (id, role, full_name, phone, email, created_at, updated_at)
+                    VALUES (?::uuid, ?, ?, ?, ?, now(), now())
+                    ON CONFLICT (id) DO NOTHING
+                """.trimIndent())
+                insertStmt.setString(1, userId)
+                insertStmt.setString(2, role)
+                insertStmt.setString(3, fullName)
+                insertStmt.setString(4, phone)
+                insertStmt.setString(5, effectiveEmail)
+                insertStmt.executeUpdate()
+            }
+        } catch (e: Exception) {
+            println("[DB] Warning: ensureProfileExists for $userId: ${e.message}")
+        }
     }
 
     fun getInitError(): String? = initError
 
     fun close() {
         dataSource?.close()
+        dataSource = null
     }
 }

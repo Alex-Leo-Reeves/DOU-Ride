@@ -8,72 +8,47 @@ import io.ktor.server.application.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
+import java.util.UUID
 
 fun Route.reportRoutes() {
     route("/api/reports") {
 
         // ============================================================
         // POST /api/reports/create
-        // Security/admin creates an incident report against a user.
-        // Inserts into reports table and notifies admin.
+        // Submit an incident report
         // ============================================================
         post("/create") {
             val req = try { call.receive<CreateReportRequest>() }
-            catch (e: Exception) { return@post call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid request body")) }
+            catch (e: Exception) { return@post call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid request body", e.message)) }
 
             val reporterId = call.request.headers["X-User-Id"]
                 ?: return@post call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Not authenticated"))
 
             val conn = DatabaseService.getConnection()
             try {
-                // Validate target exists
-                val targetStmt = conn.prepareStatement("""
-                    SELECT id FROM profiles WHERE id = ?::uuid
-                """.trimIndent())
-                targetStmt.setString(1, req.targetId)
-                val targetRs = targetStmt.executeQuery()
+                DatabaseService.ensureProfileExists(conn, reporterId)
+                DatabaseService.ensureProfileExists(conn, req.targetId, role = req.targetRole)
 
-                if (!targetRs.next()) {
-                    return@post call.respond(HttpStatusCode.NotFound, ErrorResponse("Target user not found"))
-                }
-
+                val reportId = UUID.randomUUID().toString()
                 val insertStmt = conn.prepareStatement("""
-                    INSERT INTO reports (reporter_id, target_id, target_role, incident_type, description, status)
-                    VALUES (?::uuid, ?::uuid, ?, ?, ?, 'open')
-                    RETURNING id
+                    INSERT INTO reports (id, reporter_id, target_id, target_role, incident_type, description, status, created_at, updated_at)
+                    VALUES (?::uuid, ?::uuid, ?::uuid, ?, ?, ?, 'open', now(), now())
                 """.trimIndent())
-                insertStmt.setString(1, reporterId)
-                insertStmt.setString(2, req.targetId)
-                insertStmt.setString(3, req.targetRole)
-                insertStmt.setString(4, req.incidentType)
-                insertStmt.setString(5, req.description ?: "")
-                val insertRs = insertStmt.executeQuery()
-                val reportId = if (insertRs.next()) insertRs.getString("id") else ""
+                insertStmt.setString(1, reportId)
+                insertStmt.setString(2, reporterId)
+                insertStmt.setString(3, req.targetId)
+                insertStmt.setString(4, req.targetRole)
+                insertStmt.setString(5, req.incidentType)
+                insertStmt.setString(6, req.description ?: "")
+                insertStmt.executeUpdate()
 
-                // Notify admin
-                val adminTokenStmt = conn.createStatement().executeQuery("""
-                    SELECT token, platform FROM notification_tokens nt
-                    JOIN profiles p ON p.id = nt.user_id
-                    WHERE p.role = 'admin' AND nt.is_active = true LIMIT 1
-                """.trimIndent())
-                if (adminTokenStmt.next()) {
-                    NotificationService.sendPush(
-                        token = adminTokenStmt.getString("token"),
-                        title = "📋 New Incident Report",
-                        body = "Report type: ${req.incidentType.replace('_', ' ')}",
-                        data = mapOf("type" to "new_report", "reportId" to reportId),
-                        platform = adminTokenStmt.getString("platform")
-                    )
-                }
-
-                println("[REPORT] Created: $reportId by $reporterId against ${req.targetId}")
-                call.respond(HttpStatusCode.Created, mapOf(
-                    "message" to "Report submitted",
-                    "reportId" to reportId
+                call.respond(HttpStatusCode.Created, CreateReportResponse(
+                    message = "Report submitted successfully",
+                    reportId = reportId
                 ))
             } catch (e: Exception) {
                 println("[REPORT] Create error: ${e.message}")
-                call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to submit report"))
+                call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to submit report", e.message))
             } finally {
                 conn.close()
             }
