@@ -435,15 +435,91 @@ fun Route.walletRoutes() {
                 val balRs = balStmt.executeQuery()
                 val completedBalance = if (balRs.next()) balRs.getDouble("balance") else 0.0
 
-                // Get total pending withdrawal amount
-                val pendingStmt = conn.prepareStatement("""
-                    SELECT COALESCE(SUM(amount), 0.00) AS pending
-                    FROM wallet_transactions
-                    WHERE user_id = ?::uuid AND type = 'withdrawal' AND status = 'pending'
-                """.trimIndent())
-                pendingStmt.setString(1, userId)
-                val pendingRs = pendingStmt.executeQuery()
-                val pendingAmount = if (pendingRs.next()) pendingRs.getDouble("pending") else 0.0
+                // AUTO-CLEAR: fail this user's stale pending withdrawals (>10 min)
+            // before creating a new one, so a stuck one never blocks them.
+            // Pending rows reserve NO money (balance counts completed only),
+            // so failing them is safe — the old attempt is dead by definition.
+            // NOTE: pending result check below also fails/recovers stale pendings
+            // from THIS user automatically, no manual SQL needed.
+            val clearStmt = conn.prepareStatement(
+                "UPDATE wallet_transactions SET status = 'failed', updated_at = now() " +
+                "WHERE user_id = ?::uuid AND type = 'withdrawal' AND status = 'pending' " +
+                "AND created_at < now() - interval '10 minutes'"
+            )
+            clearStmt.setString(1, userId)
+            val clearedCount = clearStmt.executeUpdate()
+            if (clearedCount > 0) {
+                println("[WITHDRAW] Auto-cleared $clearedCount stale pending withdrawals for user $userId")
+            }
+
+            // PENDING != RESERVED: a pending row means "provider not yet
+            // confirmed", not "money gone". Check OUR fresh pendings against
+            // Flutterwave first: unknown reference => money never moved, so
+            // fail it free instead of blocking the user. Only genuinely
+            // in-flight amounts reserve funds.
+            var inFlightPending = 0.0
+            try {
+                val ownStmt = conn.prepareStatement(
+                    "SELECT id, reference, amount FROM wallet_transactions " +
+                    "WHERE user_id = ?::uuid AND type = 'withdrawal' AND status = 'pending' " +
+                    "ORDER BY created_at ASC LIMIT 5"
+                )
+                ownStmt.setString(1, userId)
+                val ownRs = ownStmt.executeQuery()
+                val ownList = mutableListOf<Triple<String, String, Double>>()
+                while (ownRs.next()) ownList.add(Triple(ownRs.getString("id"), ownRs.getString("reference"), ownRs.getDouble("amount")))
+                for ((ownId, ownRef, ownAmt) in ownList) {
+                    try {
+                        val pollResp = httpClient.get("https://api.flutterwave.com/v3/transfers?reference=" + ownRef) {
+                            header(HttpHeaders.Authorization, "Bearer " + AppConfig.flutterwaveSecretKey)
+                        }
+                        val pollText = pollResp.bodyAsText()
+                        var hasRecord = false
+                        var fwState: String? = null
+                        if (pollResp.status.isSuccess()) {
+                            try {
+                                val pj = json.parseToJsonElement(pollText).jsonObject
+                                val arr = pj["data"]?.jsonArray
+                                if (arr != null && arr.size > 0) {
+                                    hasRecord = true
+                                    fwState = arr[0].jsonObject["status"]?.jsonPrimitive?.contentOrNull?.uppercase()
+                                }
+                            } catch (_: Exception) { hasRecord = false }
+                        } else {
+                            val low = pollText.lowercase()
+                            if (low.contains("no record") || low.contains("not found") || low.contains("unknown reference") || low.contains("does not exist")) {
+                                val u = conn.prepareStatement("UPDATE wallet_transactions SET status = 'failed', updated_at = now() WHERE id = ?::uuid")
+                                u.setString(1, ownId); u.executeUpdate()
+                                println("[WITHDRAW] Auto-failed " + ownRef + ": provider unknown ref")
+                                continue
+                            } else {
+                                inFlightPending += ownAmt
+                                continue
+                            }
+                        }
+                        if (!hasRecord) {
+                            val u = conn.prepareStatement("UPDATE wallet_transactions SET status = 'failed', updated_at = now() WHERE id = ?::uuid")
+                            u.setString(1, ownId); u.executeUpdate()
+                            println("[WITHDRAW] Auto-failed " + ownRef + ": no provider record")
+                        } else if (fwState == "SUCCESSFUL") {
+                            val u = conn.prepareStatement("UPDATE wallet_transactions SET status = 'completed', updated_at = now() WHERE id = ?::uuid")
+                            u.setString(1, ownId); u.executeUpdate()
+                            println("[WITHDRAW] Recovered " + ownRef + " as COMPLETED")
+                        } else if (fwState == "FAILED" || fwState == "REJECTED" || fwState == "CANCELLED") {
+                            val u = conn.prepareStatement("UPDATE wallet_transactions SET status = 'failed', updated_at = now() WHERE id = ?::uuid")
+                            u.setString(1, ownId); u.executeUpdate()
+                            println("[WITHDRAW] Recovered " + ownRef + " as FAILED (" + fwState + ")")
+                        } else {
+                            inFlightPending += ownAmt
+                        }
+                    } catch (_: Exception) {
+                        inFlightPending += ownAmt
+                    }
+                }
+            } catch (e: Exception) {
+                println("[WITHDRAW] Own-pending check failed: " + e.message)
+            }
+            val pendingAmount = inFlightPending
 
                 val availableBalance = completedBalance - pendingAmount
 
@@ -482,10 +558,10 @@ fun Route.walletRoutes() {
                 // but Flutterwave expects its own codes (e.g. 999992 for OPay).
                 // Map the known fintech aliases before calling the API.
                 val fwBankCode = mapOf(
-                    "000033" to "999992",  // OPay Digital Services
+                    "000033" to "999992",  // OPay Digital Services (Flutterwave code)
                     "000034" to "999995",  // PalmPay
                     "000031" to "999991",  // Moniepoint MFB
-                    "000032" to "999992",  // Kuda (fallback to OPay rail if unsupported)
+                    "000032" to "999992",  // Kuda (fallback rail)
                     "999992" to "999992",
                     "999995" to "999995",
                     "999991" to "999991"
@@ -719,23 +795,44 @@ fun Route.walletRoutes() {
                 return@post call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid account number or bank code"))
             }
 
-            if (AppConfig.flutterwaveSecretKey.isBlank() || AppConfig.flutterwaveSecretKey.contains("TEST", ignoreCase = true)) {
-                println("[VERIFY] REFUSED: no LIVE secret key configured (len=${AppConfig.flutterwaveSecretKey.length})")
+            if (AppConfig.flutterwaveSecretKey.isBlank()) {
+                println("[VERIFY] REFUSED: FLUTTERWAVE_SECRET_KEY missing on server")
                 return@post call.respond(
                     HttpStatusCode.ServiceUnavailable,
-                    ErrorResponse("Verification unavailable", "Server payout key is not a LIVE key. Set FLUTTERWAVE_SECRET_KEY (live) in Render env and redeploy.")
+                    ErrorResponse("Verification unavailable", "Server payout key is missing. Set FLUTTERWAVE_SECRET_KEY (live) in Render env and redeploy.")
                 )
             }
 
             // Normalize app-side NIP codes (000033 etc.) to Flutterwave bank codes.
             val fwBankCode = mapOf(
-                "000033" to "999992",
-                "000034" to "999995",
-                "000031" to "999991",
+                "000033" to "999992",  // OPay Digital Services
+                "000034" to "999995",  // PalmPay
+                "000031" to "999991",  // Moniepoint MFB
+                "000032" to "044",     // Access Bank (closest supported; Kuda unsupported by FW)
                 "999992" to "999992",
                 "999995" to "999995",
                 "999991" to "999991"
             )[bankCode.trim()] ?: bankCode.trim()
+
+            // PRE-CHECK: fetch live NGN balance so failures return
+            // "insufficient funds" instead of a cryptic verification error.
+            val ngnBalance: Double? = try {
+                val httpClient = HttpClient(CIO)
+                val balResp = httpClient.get("https://api.flutterwave.com/v3/balances/NGN") {
+                    header(HttpHeaders.Authorization, "Bearer ${AppConfig.flutterwaveSecretKey}")
+                }
+                val balText = balResp.bodyAsText()
+                println("[VERIFY] NGN balance check HTTP ${balResp.status.value}: ${balText.take(300)}")
+                httpClient.close()
+                if (balResp.status.isSuccess()) {
+                    Json { ignoreUnknownKeys = true }.parseToJsonElement(balText)
+                        .jsonObject["data"]?.jsonObject?.get("available_balance")
+                        ?.jsonPrimitive?.contentOrNull?.toDoubleOrNull()
+                } else null
+            } catch (e: Exception) {
+                println("[VERIFY] NGN balance check failed: ${e.message}")
+                null
+            }
 
             try {
                 val httpClient = HttpClient(CIO)

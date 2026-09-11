@@ -1,8 +1,8 @@
 #!/bin/bash
 
-URL="https://vikingfile.com/d/IQTKSKXzB9/%5BSuperPSX%5D-Batman.Return.To.Arkham-CUSA02000-EUR-Game-%285.05%2B%29-PS4.pkg"
+URL="https://vikingfile.com/d/JR6MHgrZ7M/%5BSuperPSX.com%5D-WWE.2K25_CUSA48576_v1.00_%5B12.00%5D_OPOISSO893.pkg"
 DEST_DIR="/run/media/masteralex/New Volume"
-OUTPUT_FILE="Homefront.The.Revolution-CUSA00938-EUR-Game-PS4.pkg"
+OUTPUT_FILE="shit.pkg"
 MAX_RETRIES=50
 RETRY_DELAY=60  # seconds
 

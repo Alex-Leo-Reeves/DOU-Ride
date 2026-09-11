@@ -119,9 +119,12 @@ fun reconcilePendingDeposits() = runBlocking {
 fun processPendingWithdrawals() = runBlocking {
     val conn = DatabaseService.getConnection()
     try {
-        // Process only ONE withdrawal at a time to prevent double-spending
+        // Process only ONE withdrawal at a time to prevent double-spending.
+        // IDEMPOTENCY: skip if this reference was already sent to Flutterwave
+        // (transfer_id present) — just poll its status instead of re-sending,
+        // so a retry never double-pays the user.
         val pendingStmt = conn.prepareStatement(
-            "SELECT id, user_id, amount, reference FROM wallet_transactions " +
+            "SELECT id, user_id, amount, reference, metadata, transfer_id FROM wallet_transactions " +
             "WHERE type = 'withdrawal' AND status = 'pending' ORDER BY created_at ASC LIMIT 1"
         )
         val pendingRs = pendingStmt.executeQuery()
@@ -132,14 +135,31 @@ fun processPendingWithdrawals() = runBlocking {
         val amount = pendingRs.getDouble("amount")
         val reference = pendingRs.getString("reference")
         
-        // Get bank details
-        val bankStmt = conn.prepareStatement("SELECT bank_account_number, bank_code FROM profiles WHERE id = ?::uuid LIMIT 1")
-        bankStmt.setString(1, userId)
-        val bankRs = bankStmt.executeQuery()
-        if (!bankRs.next()) { markWithdrawalFailed(conn, txId, "No bank details"); return@runBlocking }
-        val accountNumber = bankRs.getString("bank_account_number")
-        val bankCode = bankRs.getString("bank_code")
-        if (accountNumber.isNullOrBlank() || bankCode.isNullOrBlank()) { markWithdrawalFailed(conn, txId, "Incomplete bank details"); return@runBlocking }
+        // Destination details live ON the transaction (each user has different
+        // bank details) — never pull them from another user's profile row.
+        val rawMeta = try { pendingRs.getString("metadata") } catch (e: Exception) { null }
+        var accountNumber: String? = null
+        var bankCode: String? = null
+        try {
+            if (!rawMeta.isNullOrBlank()) {
+                val meta = Json { ignoreUnknownKeys = true }.parseToJsonElement(rawMeta).jsonObject
+                accountNumber = meta["accountNumber"]?.jsonPrimitive?.contentOrNull
+                bankCode = meta["bankCode"]?.jsonPrimitive?.contentOrNull
+            }
+        } catch (e: Exception) { println("[PAYOUT] Metadata parse failed for $reference: ${e.message}") }
+        if (accountNumber.isNullOrBlank() || bankCode.isNullOrBlank()) {
+            // Legacy rows without metadata: fall back to the OWNER's saved account.
+            try {
+                val bankStmt = conn.prepareStatement("SELECT bank_account_number, bank_code FROM profiles WHERE id = ?::uuid LIMIT 1")
+                bankStmt.setString(1, userId)
+                val bankRs = bankStmt.executeQuery()
+                if (bankRs.next()) {
+                    if (accountNumber.isNullOrBlank()) accountNumber = bankRs.getString("bank_account_number")
+                    if (bankCode.isNullOrBlank()) bankCode = bankRs.getString("bank_code")
+                }
+            } catch (e: Exception) { println("[PAYOUT] Profile fallback failed for $reference: ${e.message}") }
+        }
+        if (accountNumber.isNullOrBlank() || bankCode.isNullOrBlank()) { markWithdrawalFailed(conn, txId, "No bank details on transaction"); return@runBlocking }
         
         // Calculate available balance (completed balance minus all pending withdrawals)
         val balStmt = conn.prepareStatement(
@@ -170,6 +190,32 @@ fun processPendingWithdrawals() = runBlocking {
         
         // Process transfer via Flutterwave
         var transferSuccess = false
+        var failDetail: String? = null
+        var transferId: String? = try { pendingRs.getString("transfer_id") } catch (e: Exception) { null }
+        // If we already sent this reference to Flutterwave, POLL the transfer
+        // status instead of creating a second transfer (prevents double-pay).
+        if (!transferId.isNullOrBlank()) {
+            try {
+                val httpClient = HttpClient(CIO)
+                val pollResp = httpClient.get("https://api.flutterwave.com/v3/transfers/$transferId") {
+                    header(HttpHeaders.Authorization, "Bearer ${AppConfig.flutterwaveSecretKey}")
+                }
+                val pollText = pollResp.bodyAsText()
+                if (pollResp.status.isSuccess()) {
+                    val pollJson = Json { ignoreUnknownKeys = true }.parseToJsonElement(pollText).jsonObject
+                    val fwStatus = pollJson["data"]?.jsonObject?.get("status")?.jsonPrimitive?.contentOrNull
+                    println("[PAYOUT] Poll $reference transferId=$transferId fwStatus=$fwStatus")
+                    when (fwStatus?.uppercase()) {
+                        "SUCCESSFUL" -> transferSuccess = true
+                        "FAILED", "REJECTED", "CANCELLED" -> { transferSuccess = false; failDetail = "Provider reports $fwStatus" }
+                        else -> { println("[PAYOUT] $reference still in progress at provider ($fwStatus); leaving pending"); httpClient.close(); return@runBlocking }
+                    }
+                } else {
+                    failDetail = "Poll HTTP ${pollResp.status.value}: ${pollText.take(200)}"
+                }
+                httpClient.close()
+            } catch (e: Exception) { failDetail = e.message; println("[PAYOUT] Poll error for $reference: ${e.message}") }
+        } else {
         try {
             val httpClient = HttpClient(CIO)
             // Background payout also needs the Flutterwave code, not the NIP code.
@@ -193,18 +239,20 @@ fun processPendingWithdrawals() = runBlocking {
                 if (responseBody["status"]?.jsonPrimitive?.contentOrNull == "success") transferSuccess = true
             }
             httpClient.close()
-        } catch (e: Exception) { println("[PAYOUT] Flutterwave transfer error: ${e.message}") }
-        
+        } catch (e: Exception) { failDetail = e.message; println("[PAYOUT] Flutterwave transfer error: ${e.message}") }
+        } // end else (fresh transfer attempt)
+
         if (transferSuccess) {
             val newBalance = availableBalance - amount
-            val updateStmt = conn.prepareStatement("UPDATE wallet_transactions SET status = 'completed', balance_before = ?, balance_after = ?, updated_at = now() WHERE id = ?::uuid")
+            val updateStmt = conn.prepareStatement("UPDATE wallet_transactions SET status = 'completed', balance_before = ?, balance_after = ?, transfer_id = ?, updated_at = now() WHERE id = ?::uuid")
             updateStmt.setDouble(1, availableBalance)
             updateStmt.setDouble(2, newBalance)
-            updateStmt.setString(3, txId)
+            updateStmt.setString(3, transferId)
+            updateStmt.setString(4, txId)
             updateStmt.executeUpdate()
-            println("[PAYOUT] Withdrawal completed for user $userId: ₦$amount")
+            println("[PAYOUT] Withdrawal completed for user $userId: ₦$amount (transferId=$transferId)")
         } else {
-            markWithdrawalFailed(conn, txId, "Transfer failed")
+            markWithdrawalFailed(conn, txId, "Transfer failed: ${failDetail ?: "unknown"}")
         }
     } catch (e: Exception) { println("[PAYOUT] Error: ${e.message}") } finally { conn.close() }
 }
