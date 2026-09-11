@@ -1,6 +1,6 @@
 #!/bin/bash
 
-URL="https://vikingfile.com/d/JR6MHgrZ7M/%5BSuperPSX.com%5D-WWE.2K25_CUSA48576_v1.00_%5B12.00%5D_OPOISSO893.pkg"
+URL="https://vikingfile.com/d/4HdhpvFTM0/%5BSuperPSX%5D-WWE.2K25_CUSA48576_v1.28_BACKPORT_%5B5.05-6.72-7.xx-9.00-11.00-12.00%5D-PS4.pkg"
 DEST_DIR="/run/media/masteralex/New Volume"
 OUTPUT_FILE="shit.pkg"
 MAX_RETRIES=50

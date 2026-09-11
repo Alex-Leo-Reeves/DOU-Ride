@@ -3,6 +3,7 @@ package com.dou.transit.routes
 import com.dou.transit.config.AppConfig
 import com.dou.transit.models.*
 import com.dou.transit.services.DatabaseService
+import com.dou.transit.services.EgressIpManager
 import com.dou.transit.services.NotificationService
 import io.ktor.client.*
 import io.ktor.client.engine.cio.*
@@ -615,9 +616,16 @@ fun Route.walletRoutes() {
                         // Flutterwave returns "Please enable IP Whitelisting
                         // to access this service" (HTTP 400) when the live key
                         // has no IPs whitelisted on its dashboard. Surface a
-                        // clear dashboard-fix message so the user knows.
+                        // clear dashboard-fix message with the CURRENT egress IP
+                        // so the user always knows exactly what to whitelist,
+                        // even if the IP changes over time (Render shared tier).
                         if (failReason.contains("IP Whitelist", ignoreCase = true)) {
-                            failReason = "Withdrawal provider requires IP whitelisting. On the Flutterwave dashboard go to Settings > API and add the server's outgoing IP (Render) to the API IP whitelist, then retry — or contact Flutterwave support."
+                            val ip = EgressIpManager.currentIpOrResolve()
+                            failReason = if (ip != null) {
+                                "Withdrawal provider requires IP whitelisting. Whitelist this server's IP $ip on the Flutterwave dashboard (Settings > API > IP Whitelist), then retry."
+                            } else {
+                                "Withdrawal provider requires IP whitelisting. On the Flutterwave dashboard go to Settings > API and add the server's outgoing IP (Render) to the API IP whitelist, then retry — or contact Flutterwave support."
+                            }
                         }
                     }
                     if (transferId != null || finalStatus != "pending") {
@@ -887,7 +895,9 @@ fun Route.walletRoutes() {
                 } else {
                     val lower = responseBodyText.lowercase()
                     if (lower.contains("ip whitelist")) {
-                        call.respond(HttpStatusCode.ServiceUnavailable, ErrorResponse("Verification unavailable", "Flutterwave requires IP whitelisting for this live key. On the Flutterwave dashboard go to Settings > API and whitelist the server's outgoing IP (Render)."))
+                        val ip = EgressIpManager.currentIpOrResolve()
+                        val ipMsg = if (ip != null) " Whitelist this server's IP $ip." else " Whitelist the server's outgoing IP (Render)."
+                        call.respond(HttpStatusCode.ServiceUnavailable, ErrorResponse("Verification unavailable", "Flutterwave requires IP whitelisting for this live key. On the Flutterwave dashboard go to Settings > API and whitelist the server's outgoing IP (Render).$ipMsg"))
                     } else {
                         call.respond(HttpStatusCode.BadRequest, ErrorResponse("Verification failed", "Flutterwave API returned ${verifyResp.status}: $responseBodyText"))
                     }
