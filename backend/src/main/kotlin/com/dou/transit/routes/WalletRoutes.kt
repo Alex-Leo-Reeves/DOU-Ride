@@ -577,6 +577,39 @@ fun Route.walletRoutes() {
                     println("[WITHDRAW] Normalized bank code ${req.bankCode} -> $fwBankCode for $reference")
                 }
 
+                // PRE-CHECK: verify Flutterwave has sufficient NGN balance
+                // BEFORE attempting the transfer. If their wallet is empty or
+                // low, we surface "insufficient funds" instead of a cryptic
+                // "Transfer creation failed" — and we do NOT mark the user's
+                // withdrawal as pending (no money was attempted).
+                val ngnBalance: Double? = try {
+                    val balClient = HttpClient(CIO) { engine { requestTimeout = 10_000 } }
+                    val balResp = balClient.get("https://api.flutterwave.com/v3/balances/NGN") {
+                        header(HttpHeaders.Authorization, "Bearer ${AppConfig.flutterwaveSecretKey}")
+                    }
+                    val balText = balResp.bodyAsText()
+                    balClient.close()
+                    println("[WITHDRAW] Flutterwave NGN balance check HTTP ${balResp.status.value}: ${balText.take(200)}")
+                    if (balResp.status.isSuccess()) {
+                        Json { ignoreUnknownKeys = true }.parseToJsonElement(balText)
+                            .jsonObject["data"]?.jsonObject?.get("available_balance")
+                            ?.jsonPrimitive?.contentOrNull?.toDoubleOrNull()
+                    } else null
+                } catch (e: Exception) {
+                    println("[WITHDRAW] Flutterwave balance check failed: ${e.message}")
+                    null
+                }
+                if (ngnBalance != null && ngnBalance < req.amount) {
+                    println("[WITHDRAW] REFUSED $reference: Flutterwave NGN balance ₦${ngnBalance.toInt()} < withdrawal ₦${req.amount.toInt()}")
+                    return@post call.respond(
+                        HttpStatusCode.ServiceUnavailable,
+                        ErrorResponse(
+                            "Withdrawal provider has insufficient funds",
+                            "The payout provider's NGN balance (₦${ngnBalance.toInt()}) is less than the withdrawal amount (₦${req.amount.toInt()}). Fund the Flutterwave NGN wallet and retry — no money was debited from your wallet."
+                        )
+                    )
+                }
+
                 // Attempt the Flutterwave transfer NOW (synchronously) so the
                 // user gets an immediate completed/failed result instead of a
                 // withdrawal stuck at "pending" forever when the background
@@ -602,6 +635,8 @@ fun Route.walletRoutes() {
                     }
                     val bodyText = resp.bodyAsText()
                     fwDebug = "HTTP ${resp.status.value}: ${bodyText.take(300)}"
+                    // Log the FULL Flutterwave response server-side for debugging.
+                    println("[WITHDRAW] Flutterwave full response for $reference: $bodyText")
                     val bodyJson = try { json.parseToJsonElement(bodyText).jsonObject } catch (e: Exception) { null }
                     if (resp.status.isSuccess() && bodyJson?.get("status")?.jsonPrimitive?.contentOrNull == "success") {
                         finalStatus = "completed"
