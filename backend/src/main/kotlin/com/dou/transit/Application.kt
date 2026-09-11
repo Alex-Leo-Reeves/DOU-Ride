@@ -6,6 +6,10 @@ import com.dou.transit.routes.*
 import com.dou.transit.services.DatabaseService
 import com.dou.transit.services.NotificationService
 import io.ktor.http.*
+import io.ktor.client.*
+import io.ktor.client.engine.cio.*
+import io.ktor.client.request.*
+import io.ktor.client.statement.*
 import io.ktor.serialization.kotlinx.json.*
 import io.ktor.server.application.*
 import io.ktor.server.engine.*
@@ -62,14 +66,23 @@ fun Application.module() {
 
     startBackgroundJobs()
 
-    routing {
-        suspend fun handleHealth(call: ApplicationCall) {
-            val dbOk = DatabaseService.isHealthy()
-            call.respond(HealthResponse(status = "ok", version = "1.0.2", service = "DOU Transit Production API", database = if (dbOk) "connected" else "connecting", timestamp = System.currentTimeMillis()))
+    val dbHealth: suspend ApplicationCall.() -> Unit = {
+        val dbOk = DatabaseService.isHealthy()
+        respond(HealthResponse(status = "ok", version = "1.0.2", service = "DOU Transit Production API", database = if (dbOk) "connected" else "connecting", timestamp = System.currentTimeMillis()))
+    }
+
+    val egressIp: suspend ApplicationCall.() -> Unit = {
+        val http = HttpClient(CIO)
+        try {
+            val ip = try { http.get("https://api.ipify.org").bodyAsText().trim() } catch (e: Exception) { "error: ${e.message}" }
+            println("[DEBUG-IP] Server egress IP requested, resolved: $ip")
+            respond("Egress IP: $ip")
+        } finally {
+            http.close()
         }
-        get("/") { handleHealth(call) }
-        get("/health") { handleHealth(call) }
-        get("/api/health") { handleHealth(call) }
+    }
+
+    routing {
         authRoutes()
         walletRoutes()
         rideRoutes()
@@ -85,6 +98,14 @@ fun Application.module() {
         notificationRoutes()
         offlineRoutes()
         paymentRequestRoutes()
+
+        get("/") { call.dbHealth() }
+        get("/health") { call.dbHealth() }
+        get("/api/health") { call.dbHealth() }
+
+        // TEMPORARY debug: reveals the server outgoing IP so it can be
+        // whitelisted on Flutterwave dashboard. REMOVE after whitelisting.
+        get("/debug/ip") { call.egressIp() }
     }
 
     println("[SERVER] DOU Transit API v1.0.2 started on port ${AppConfig.port}")
