@@ -541,6 +541,12 @@ fun Route.walletRoutes() {
                     )
                 }
 
+                // Flutterwave REQUIRES IP whitelisting on the dashboard for the
+                // v3 Transfers API (live keys). If their server rejects our
+                // request, surface a clear "whitelist your server IP" message
+                // instead of a generic "Withdrawal failed" so the user knows
+                // exactly what to fix.
+
                 val txStmt = conn.prepareStatement("""
                     INSERT INTO wallet_transactions (user_id, type, amount, fee, balance_before, balance_after, status, reference, description, metadata)
                     VALUES (?::uuid, 'withdrawal', ?, 0.00, ?, ?, 'pending', ?, ?, ?::jsonb)
@@ -606,6 +612,13 @@ fun Route.walletRoutes() {
                     } else {
                         finalStatus = "failed"
                         failReason = bodyJson?.get("message")?.jsonPrimitive?.contentOrNull ?: "HTTP ${resp.status.value}"
+                        // Flutterwave returns "Please enable IP Whitelisting
+                        // to access this service" (HTTP 400) when the live key
+                        // has no IPs whitelisted on its dashboard. Surface a
+                        // clear dashboard-fix message so the user knows.
+                        if (failReason.contains("IP Whitelist", ignoreCase = true)) {
+                            failReason = "Withdrawal provider requires IP whitelisting. On the Flutterwave dashboard go to Settings > API and add the server's outgoing IP (Render) to the API IP whitelist, then retry — or contact Flutterwave support."
+                        }
                     }
                     if (transferId != null || finalStatus != "pending") {
                         val upd = conn.prepareStatement("UPDATE wallet_transactions SET status = ?, transfer_id = ?, description = ?, updated_at = now() WHERE reference = ?")
@@ -872,7 +885,12 @@ fun Route.walletRoutes() {
                         call.respond(HttpStatusCode.BadRequest, ErrorResponse("Could not verify account", message ?: "Account not found or bank not supported"))
                     }
                 } else {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Verification failed", "Flutterwave API returned ${verifyResp.status}: $responseBodyText"))
+                    val lower = responseBodyText.lowercase()
+                    if (lower.contains("ip whitelist")) {
+                        call.respond(HttpStatusCode.ServiceUnavailable, ErrorResponse("Verification unavailable", "Flutterwave requires IP whitelisting for this live key. On the Flutterwave dashboard go to Settings > API and whitelist the server's outgoing IP (Render)."))
+                    } else {
+                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Verification failed", "Flutterwave API returned ${verifyResp.status}: $responseBodyText"))
+                    }
                 }
                 httpClient.close()
             } catch (e: Exception) {
